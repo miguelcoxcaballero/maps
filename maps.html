@@ -89,8 +89,8 @@
 
         /* Speed Limit Sign (European Style) - UPDATED LARGER */
         .speed-limit-sign {
-            width: 80px; /* Increased from 52px */
-            height: 80px; /* Increased from 52px */
+            width: 80px; 
+            height: 80px; 
             background: white;
             border: 6px solid #cc0000;
             border-radius: 50%;
@@ -99,9 +99,8 @@
             justify-content: center;
             font-family: 'Roboto', sans-serif;
             font-weight: 900;
-            font-size: 32px; /* Increased from 22px */
+            font-size: 32px; 
             color: #222;
-            /* UPDATED: Stronger, softer shadow matching the new header/footer style */
             box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
             z-index: 1100;
         }
@@ -110,10 +109,10 @@
         .road-shield {
             background-color: #1967d2;
             color: white;
-            padding: 4px 12px; /* Increased padding */
+            padding: 4px 12px; 
             border-radius: 6px;
             font-weight: 700;
-            font-size: 1.3rem; /* Increased from 0.85rem */
+            font-size: 1.3rem; 
             display: inline-block;
             box-shadow: 0 2px 4px rgba(0,0,0,0.25);
             border: 1px solid rgba(255,255,255,0.3);
@@ -122,10 +121,10 @@
         .exit-badge {
             background-color: #188038;
             color: white;
-            padding: 4px 10px; /* Increased padding */
+            padding: 4px 10px; 
             border-radius: 4px;
             font-weight: 700;
-            font-size: 1.1rem; /* Increased from 0.75rem */
+            font-size: 1.1rem; 
             text-transform: uppercase;
             display: inline-flex;
             align-items: center;
@@ -190,7 +189,6 @@
     <!-- ========================================== -->
     <!-- TOP NAVIGATION HEADER (NAV MODE)           -->
     <!-- ========================================== -->
-    <!-- UPDATED: Changed shadow to a strong, multi-layered downward shadow -->
     <div id="nav-header" class="map-ui absolute top-0 left-0 right-0 bg-[#0F9D58] text-white p-10 shadow-[0_10px_15px_-3px_rgba(0,0,0,0.1),0_4px_6px_-4px_rgba(0,0,0,0.1)] transform -translate-y-[150%] transition-transform duration-300 z-50 rounded-b-[50px] md:max-w-md md:left-6 md:top-6 md:rounded-3xl md:right-auto overflow-hidden">
         
         <!-- Road Info Badge Row -->
@@ -202,11 +200,12 @@
         </div>
 
         <div class="flex items-start gap-6 relative z-10">
-            <div class="mt-1">
-                <!-- GREEN BOX SIGN: SVG injected dynamically based on maneuver -->
+            <div class="mt-1 flex flex-col items-center justify-start">
+                <!-- GREEN BOX SIGN -->
                 <div id="nav-icon" class="w-20 h-20 flex items-center justify-center">
-                    <!-- SVG sign will be injected here -->
                 </div>
+                <!-- ROUNDABOUT EXIT LABEL (big white text) -->
+                <div id="roundabout-exit-label" class="mt-1 text-white text-4xl font-black leading-none tracking-tight hidden"></div>
             </div>
             <div class="flex-1 min-w-0">
                 <div id="nav-dist" class="text-5xl font-bold mb-2">0 m</div>
@@ -216,10 +215,7 @@
 
         <!-- Lanes Container -->
         <div id="nav-lanes" class="flex items-center gap-4 mt-6 pt-4 border-t border-white/20 relative z-10 hidden">
-            <!-- Dynamic lanes injected here -->
         </div>
-
-
     </div>
 
     <!-- ========================================== -->
@@ -243,7 +239,6 @@
     <!-- ========================================== -->
     <div id="trip-card" class="map-ui absolute bottom-0 left-0 right-0 bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.1)] transform translate-y-[110%] transition-transform duration-300 rounded-t-3xl md:w-96 md:left-4 md:bottom-4 md:rounded-2xl md:shadow-google z-50">
         
-        <!-- Drag Handle (Mobile Visual) -->
         <div class="w-full flex justify-center pt-3 pb-1 md:hidden">
             <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
         </div>
@@ -286,11 +281,9 @@
     <!-- ========================================== -->
     <!-- BOTTOM BAR (NAV ACTIVE)                    -->
     <!-- ========================================== -->
-    <!-- UPDATED: Changed shadow to a strong, multi-layered UPWARD shadow to match the style -->
     <div id="nav-footer" class="map-ui absolute bottom-0 left-0 right-0 bg-white p-10 rounded-t-[50px] shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1),0_-4px_6px_-4px_rgba(0,0,0,0.1)] transform translate-y-[150%] transition-transform duration-300 flex items-center justify-between z-[1000] md:max-w-md md:left-6 md:bottom-6 md:rounded-3xl md:right-auto md:shadow-google">
         
         <!-- Speed Limit Sign -->
-        <!-- UPDATED: Adjusted position for larger size (-top-28) -->
         <div id="speed-limit" class="speed-limit-sign hidden absolute -top-28 left-10 transform transition-all hover:scale-105">
             <span id="speed-val">50</span>
         </div>
@@ -316,7 +309,6 @@
 
     <script>
         // --- Setup ---
-        // UPDATED: Start in Murcia
         const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([37.9922, -1.1307], 14);
         
         L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
@@ -330,16 +322,15 @@
         let routingControl = null;
         let userMarker = null, destMarker = null;
         let routeCoords = [], routeInstructions = [];
-        let routeDistanceIndex = []; // NEW: For O(1) distance calc
-        // UPDATED: Added global to store total trip time for ETA calc
+        let routeDistanceIndex = [];
         let totalRouteSeconds = 0;
         let rawRouteData = null; 
         let isNavigating = false;
         let animationFrameId = null;
-        let currentVisualHeading = 0; // used as current MAP heading (camera)
+        let currentVisualHeading = 0;
         let speedLimitInterval = null; 
         const FALLBACK_COORDS = { lat: 37.9922, lng: -1.1307 };
-        const LOOKAHEAD_METERS = 10; // ARROW MUST POINT TO POSITION 10M AHEAD
+        const LOOKAHEAD_METERS = 10; 
 
         // --- Icons ---
         const createIcon = (type) => {
@@ -370,7 +361,6 @@
             }
         };
 
-        // --- Core Interactions ---
         map.on('click', e => { 
             if(!isNavigating) {
                 document.getElementById('search-results').classList.add('hidden');
@@ -415,16 +405,13 @@
             if(destLocation) calculateRoute();
         }
 
-        // --- Route Calculation with Real OSRM Data ---
         async function calculateRoute() {
             if(!userLocation || !destLocation) return;
             
             if(routingControl) map.removeControl(routingControl);
             
-            // Reset state
             rawRouteData = null;
 
-            // 1. Fetch RAW OSRM Data (Rich metadata: lanes, maxspeed, exits, ref)
             try {
                 const url = `https://router.project-osrm.org/route/v1/driving/${userLocation.lng},${userLocation.lat};${destLocation.lng},${destLocation.lat}?overview=full&steps=true&geometries=geojson&annotations=true`;
                 const response = await fetch(url);
@@ -433,7 +420,6 @@
                 console.error("OSM Fetch Error", e);
             }
             
-            // 2. Setup Leaflet Routing Machine (Visuals)
             routingControl = L.Routing.control({
                 waypoints: [userLocation, destLocation],
                 router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1', profile: 'driving' }),
@@ -452,7 +438,6 @@
                 routeCoords = route.coordinates;
                 routeInstructions = route.instructions; 
 
-                // NEW: Pre-calculate cumulative distances for O(1) path length calculation
                 routeDistanceIndex = [0];
                 let totalDist = 0;
                 for(let i = 0; i < routeCoords.length - 1; i++) {
@@ -460,7 +445,6 @@
                     routeDistanceIndex.push(totalDist);
                 }
                 
-                // Parse Time
                 totalRouteSeconds = route.summary.totalTime;
                 const hours = Math.floor(totalRouteSeconds / 3600);
                 const mins = Math.round((totalRouteSeconds % 3600) / 60);
@@ -469,7 +453,6 @@
                 
                 const km = (route.summary.totalDistance / 1000).toFixed(1);
                 
-                // Update UI
                 document.getElementById('route-time').textContent = timeStr;
                 document.getElementById('route-dist').textContent = `(${km} km)`;
                 document.getElementById('nav-footer-time').textContent = timeStr;
@@ -482,12 +465,10 @@
                 document.getElementById('trip-card').classList.remove('translate-y-[110%]');
                 document.getElementById('trip-card').classList.add('translate-y-0');
                 
-                // MOVE CONTROLS UP to avoid Trip Card
                 document.getElementById('map-controls').classList.add('-translate-y-[200px]');
             }).addTo(map);
         }
 
-        // --- Navigation Logic ---
         function startNavigation() {
             if(!routeCoords.length) return;
             isNavigating = true;
@@ -496,10 +477,9 @@
             document.getElementById('trip-card').classList.add('translate-y-[110%]');
             document.getElementById('trip-card').classList.remove('translate-y-0');
             
-            // ADJUST CONTROLS for Nav Footer (Move UP, not down)
             const controls = document.getElementById('map-controls');
-            controls.classList.remove('translate-y-[200px]'); // Safety remove old down-shift
-            controls.classList.add('-translate-y-[250px]'); // Move UP above larger footer
+            controls.classList.remove('translate-y-[200px]');
+            controls.classList.add('-translate-y-[250px]');
             
             document.getElementById('nav-header').classList.remove('-translate-y-[150%]');
             document.getElementById('nav-footer').classList.remove('translate-y-[150%]');
@@ -514,16 +494,12 @@
             
             if (lookaheadPt) {
                 const bearing = getBearing(startPos.lat, startPos.lng, lookaheadPt.lat, lookaheadPt.lng);
-
-                // Map heading starts aligned with 10m-ahead direction
                 currentVisualHeading = bearing;
-
                 document.getElementById('map').style.transform = `rotateX(60deg) rotateZ(${-currentVisualHeading}deg) scale(2.0)`;
                 setTimeout(() => {
                     const el = userMarker.getElement();
                     if (el) {
                         const inner = el.querySelector('.arrow-icon-inner');
-                        // ARROW EXACTLY ALONG 10M-AHEAD DIRECTION
                         if(inner) inner.style.transform = `rotate(${bearing}deg)`;
                     }
                 }, 0);
@@ -534,9 +510,8 @@
                 map.setZoom(19, {animate: true});
             }
 
-            // Start polling for Real Speed Data
             fetchSpeedLimit();
-            speedLimitInterval = setInterval(fetchSpeedLimit, 6000); // Check every 6s
+            speedLimitInterval = setInterval(fetchSpeedLimit, 6000); 
 
             animateRoute();
         }
@@ -571,57 +546,42 @@
             return routeCoords.length ? L.latLng(routeCoords[routeCoords.length-1]) : null;
         }
 
-        // --- NEW ROBUST SPEED LIMIT FETCHER ---
         async function fetchSpeedLimit() {
             if(!isNavigating || !userMarker) return;
-            
             const pos = userMarker.getLatLng();
-            
-            // Query remains robust to find the road
             const query = `
                 [out:json];
                 way(around:35,${pos.lat},${pos.lng})
                 ["highway"~"^(motorway|trunk|primary|secondary|tertiary|residential|unclassified)$"];
                 out tags;
             `;
-            
             try {
                 const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
                 const response = await fetch(url);
                 const data = await response.json();
-                
                 const speedEl = document.getElementById('speed-limit');
-
                 if (data.elements && data.elements.length > 0) {
-                    // Get the first element (closest usually)
                     const tags = data.elements[0].tags;
                     let speed = tags.maxspeed;
-                    
                     if (speed) {
-                        // Explicit Speed Limit Found
                         if (speed === 'none') {
                             speedEl.classList.add('hidden');
                             return;
                         }
-                        
                         const match = speed.match(/\d+/);
                         if (match) {
                             updateSpeedUI(match[0]);
                             return;
                         }
-                        
-                        // Text aliases (only if explicitly tagged in OSM)
                         if (speed.includes('urban') || speed === 'ES:urban') updateSpeedUI('50');
                         else if (speed.includes('rural')) updateSpeedUI('90');
                         else if (speed.includes('motorway')) updateSpeedUI('120');
                         else if (speed.includes('trunk')) updateSpeedUI('100');
-                        else speedEl.classList.add('hidden'); // Unknown text format
+                        else speedEl.classList.add('hidden'); 
                     } else {
-                        // No maxspeed tag present? Hide the sign. Do not guess.
                         speedEl.classList.add('hidden');
                     }
                 } else {
-                    // No road data found? Hide the sign.
                     speedEl.classList.add('hidden');
                 }
             } catch (e) {
@@ -641,13 +601,9 @@
             let currentSpeed = 500; 
             
             const lerp = (a, b, t) => a + (b - a) * t;
-            const shortestRot = (curr, target) => {
-                let d = (target - curr) % 360;
-                return curr + (d > 180 ? d - 360 : d < -180 ? d + 360 : d);
-            };
 
             function angularDiff(a, b) {
-                let d = (b - a + 540) % 360 - 180; // -180..180
+                let d = (b - a + 540) % 360 - 180;
                 return d;
             }
 
@@ -667,23 +623,17 @@
                 const lng = lerp(start.lng, end.lng, percent);
                 const currPos = L.latLng(lat, lng);
 
-                // Look 10 m ahead along the route from the CURRENT position
                 const lookaheadPt = getLookaheadPoint(index, currPos, LOOKAHEAD_METERS); 
                 if(lookaheadPt) {
                     const bearing = getBearing(currPos.lat, currPos.lng, lookaheadPt.lat, lookaheadPt.lng);
-                    
                     if (userMarker) {
                         userMarker.setLatLng(currPos);
-
-                        // Smooth CAMERA heading toward 10m-ahead bearing
                         const diff = angularDiff(currentVisualHeading, bearing);
                         currentVisualHeading = currentVisualHeading + diff * 0.15;
                         const mapHeading = currentVisualHeading;
 
-                        // Map rotation (camera)
                         document.getElementById('map').style.transform = `rotateX(60deg) rotateZ(${-mapHeading}deg) scale(2.0)`;
                         
-                        // ARROW EXACTLY ALIGNED WITH 10M-AHEAD DIRECTION (no smoothing)
                         const el = userMarker.getElement();
                         if (el) {
                             const inner = el.querySelector('.arrow-icon-inner');
@@ -696,10 +646,8 @@
                 }
 
                 updateInstructions(index, currPos);
-                // UPDATED: Update ETA and Distance in Footer dynamically
                 updateTripDashboard(index, percent);
                 
-                // Adjust animation speed near turns (unchanged logic but fixed angle diff)
                 if(index + 3 < routeCoords.length) {
                     const b1 = getBearing(routeCoords[index].lat, routeCoords[index].lng, routeCoords[index+1].lat, routeCoords[index+1].lng);
                     const b2 = getBearing(routeCoords[index+2].lat, routeCoords[index+2].lng, routeCoords[index+3].lat, routeCoords[index+3].lng);
@@ -716,44 +664,34 @@
             animationFrameId = requestAnimationFrame(step);
         }
 
-        // --- UPDATED: Dynamic Dashboard Updater ---
         function updateTripDashboard(index, percent) {
             if (routeDistanceIndex.length === 0) return;
 
-            // Calculate precise current distance along path
             const distAtIndex = routeDistanceIndex[index];
             const distNext = routeDistanceIndex[Math.min(index + 1, routeDistanceIndex.length - 1)];
             const currentDist = distAtIndex + (distNext - distAtIndex) * percent;
             
             const totalDist = routeDistanceIndex[routeDistanceIndex.length - 1];
             const remainingDist = Math.max(0, totalDist - currentDist);
-
-            // Calculate remaining time based on proportion of distance left
-            // (Simulation logic: assumes constant average speed relative to original estimate)
             const remainingSeconds = (remainingDist / totalDist) * totalRouteSeconds;
 
-            // Update Text
             const h = Math.floor(remainingSeconds / 3600);
-            const m = Math.ceil((remainingSeconds % 3600) / 60); // Round up usually safer for ETA
+            const m = Math.ceil((remainingSeconds % 3600) / 60);
             
             let timeStr = m + " min";
             if (h > 0) timeStr = h + " hr " + m + " min";
-            // Less than 1 min
             if (remainingSeconds < 60) timeStr = "< 1 min";
 
             document.getElementById('nav-footer-time').textContent = timeStr;
             document.getElementById('nav-footer-dist').textContent = (remainingDist / 1000).toFixed(1) + " km";
 
-            // Update ETA Time
             const etaDate = new Date();
             etaDate.setSeconds(etaDate.getSeconds() + remainingSeconds);
             document.getElementById('nav-footer-eta').textContent = etaDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         }
 
-        // --- Navigation Sign SVGs (from your green box snippet) ---
         function getNavSignSvg(rawStep, instr, text) {
             const lowerText = (text || '').toLowerCase();
-
             let osrmType = '';
             let osrmModifier = '';
 
@@ -765,221 +703,123 @@
             let lrmType = (instr && instr.type ? String(instr.type).toLowerCase() : '');
             let lrmModifier = (instr && instr.modifier ? String(instr.modifier).toLowerCase() : '');
 
-            function has(word) {
-                return lowerText.includes(word);
-            }
+            function has(word) { return lowerText.includes(word); }
 
             function pickKey() {
-                // Arrival / Destination
-                if (
-                    osrmType === 'arrive' ||
-                    lrmType === 'destination' ||
-                    lrmType === 'waypointreached' ||
-                    has('destination') ||
-                    has('arrive')
-                ) {
-                    return 'arrive';
-                }
-
-                // Roundabouts (treat enter / inside same)
-                if (osrmType === 'roundabout' || osrmType === 'rotary' || lrmType === 'roundabout' || lrmType === 'rotary') {
-                    return 'roundabout';
-                }
-
-                // Forks
+                if (osrmType === 'arrive' || lrmType === 'destination' || lrmType === 'waypointreached' || has('destination') || has('arrive')) return 'arrive';
+                if (osrmType === 'roundabout' || osrmType === 'rotary' || lrmType === 'roundabout' || lrmType === 'rotary') return 'roundabout';
                 if (osrmType === 'fork' || lrmType === 'fork') {
                     if (osrmModifier.includes('right') || lrmModifier.includes('right') || has('right')) return 'fork-right';
                     if (osrmModifier.includes('left') || lrmModifier.includes('left') || has('left')) return 'fork-left';
-                    // default
                     return 'fork-right';
                 }
-
-                // Ramps
                 if (osrmType === 'on ramp' || osrmType === 'off ramp' || osrmType === 'ramp' || lrmType === 'ramp') {
                     if (osrmModifier.includes('right') || lrmModifier.includes('right') || has('right')) return 'ramp-right';
                     if (osrmModifier.includes('left') || lrmModifier.includes('left') || has('left')) return 'ramp-left';
                     return 'ramp-right';
                 }
-
-                // Merge
                 if (osrmType === 'merge' || lrmType === 'merge' || has('merge')) {
                     if (osrmModifier.includes('right') || lrmModifier.includes('right') || has('right')) return 'merge-right';
                     if (osrmModifier.includes('left') || lrmModifier.includes('left') || has('left')) return 'merge-left';
                     return 'merge';
                 }
-
-                // U-turns
                 if (osrmModifier === 'uturn' || lrmModifier === 'uturn' || has('u-turn') || has('uturn')) {
                     if (has('right')) return 'uturn-right';
-                    // default assume left for right-hand traffic
                     return 'uturn-left';
                 }
-
-                // Sharp / Slight / Normal turns
                 if (osrmModifier.includes('sharp right') || has('sharp right')) return 'sharp-right';
                 if (osrmModifier.includes('sharp left') || has('sharp left')) return 'sharp-left';
-
                 if (osrmModifier.includes('slight right') || has('slight right')) return 'slight-right';
                 if (osrmModifier.includes('slight left') || has('slight left')) return 'slight-left';
-
                 if (osrmModifier.includes('right') || lrmModifier.includes('right') || has('right')) return 'right';
                 if (osrmModifier.includes('left') || lrmModifier.includes('left') || has('left')) return 'left';
-
-                // Straight / continue
-                if (
-                    osrmModifier === 'straight' ||
-                    lrmModifier === 'straight' ||
-                    lrmType === 'straight' ||
-                    has('continue') ||
-                    has('head') ||
-                    has('go straight')
-                ) {
-                    return 'straight';
-                }
-
-                // Fallback
+                if (osrmModifier === 'straight' || lrmModifier === 'straight' || lrmType === 'straight' || has('continue') || has('head') || has('go straight')) return 'straight';
                 return 'straight';
             }
 
-            const key = pickKey();
+            // FIX: If "Exit roundabout", force a Right Turn icon (RHT)
+            const isExitRoundabout = lowerText.includes('exit') && (lowerText.includes('roundabout') || lowerText.includes('rotary'));
+            const key = isExitRoundabout ? 'right' : pickKey();
+
             const svgMap = {
-                'right': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M30 80 V50 A20 20 0 0 1 50 30 H80"></path>
-                        <path d="M65 15 L80 30 L65 45"></path>
-                    </svg>
-                `,
-                'left': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M70 80 V50 A20 20 0 0 0 50 30 H20"></path>
-                        <path d="M35 15 L20 30 L35 45"></path>
-                    </svg>
-                `,
-                'slight-right': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M40 85 Q40 55 65 30 L70 25"></path>
-                        <path d="M50 25 L70 25 L70 45"></path>
-                    </svg>
-                `,
-                'slight-left': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M60 85 Q60 55 35 30 L30 25"></path>
-                        <path d="M50 25 L30 25 L30 45"></path>
-                    </svg>
-                `,
-                'sharp-right': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M25 80 V50 A20 20 0 0 1 45 30 H55 A20 20 0 0 1 75 50 V60"></path>
-                        <path d="M60 45 L75 60 L90 45"></path>
-                    </svg>
-                `,
-                'sharp-left': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M75 80 V50 A20 20 0 0 0 55 30 H45 A20 20 0 0 0 25 50 V60"></path>
-                        <path d="M10 45 L25 60 L40 45"></path>
-                    </svg>
-                `,
-                'uturn-right': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M30 80 V45 A20 20 0 0 1 70 45 V65"></path>
-                        <path d="M55 50 L70 65 L85 50"></path>
-                    </svg>
-                `,
-                'uturn-left': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M70 80 V45 A20 20 0 0 0 30 45 V65"></path>
-                        <path d="M15 50 L30 65 L45 50"></path>
-                    </svg>
-                `,
-                'straight': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M50 85 L50 15"></path>
-                        <path d="M35 30 L50 15 L65 30"></path>
-                    </svg>
-                `,
-                'merge': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M35 35 L50 20 L65 35"></path>
-                        <path d="M50 20 L50 55"></path>
-                        <path d="M50 55 L25 85"></path>
-                        <path d="M50 55 L75 85"></path>
-                    </svg>
-                `,
-                'merge-right': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M35 35 L50 20 L65 35"></path>
-                        <path d="M50 20 L50 85"></path>
-                        <path d="M50 55 L25 85"></path>
-                    </svg>
-                `,
-                'merge-left': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M35 35 L50 20 L65 35"></path>
-                        <path d="M50 20 L50 85"></path>
-                        <path d="M50 55 L75 85"></path>
-                    </svg>
-                `,
-                'ramp-right': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M35 85 L35 15" stroke-opacity="0.4"></path>
-                        <path d="M35 60 Q35 40 60 30 L75 25"></path>
-                        <path d="M60 15 L75 25 L65 40"></path>
-                    </svg>
-                `,
-                'ramp-left': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M65 85 L65 15" stroke-opacity="0.4"></path>
-                        <path d="M65 60 Q65 40 40 30 L25 25"></path>
-                        <path d="M35 40 L25 25 L40 15"></path>
-                    </svg>
-                `,
-                'fork-right': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M50 55 Q50 35 25 25" stroke-opacity="0.4"></path>
-                        <path d="M50 90 L50 55 Q50 35 75 25"></path>
-                        <path d="M60 20 L75 25 L70 40"></path>
-                    </svg>
-                `,
-                'fork-left': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M50 55 Q50 35 75 25" stroke-opacity="0.4"></path>
-                        <path d="M50 90 L50 55 Q50 35 25 25"></path>
-                        <path d="M30 40 L25 25 L40 20"></path>
-                    </svg>
-                `,
-                'roundabout': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M50 70 A 25 25 0 1 0 25 45 L 25 55"></path>
-                        <path d="M15 45 L 25 55 L 35 45"></path>
-                    </svg>
-                `,
-                'arrive': `
-                    <svg viewBox="0 0 100 100">
-                        <path d="M50 85 C 50 85 25 55 25 35 A 25 25 0 1 1 75 35 C 75 55 50 85 50 85 Z"></path>
-                        <circle cx="50" cy="35" r="10"></circle>
-                    </svg>
-                `
+                'right': `<svg viewBox="0 0 100 100"><path d="M30 80 V50 A20 20 0 0 1 50 30 H80"></path><path d="M65 15 L80 30 L65 45"></path></svg>`,
+                'left': `<svg viewBox="0 0 100 100"><path d="M70 80 V50 A20 20 0 0 0 50 30 H20"></path><path d="M35 15 L20 30 L35 45"></path></svg>`,
+                'slight-right': `<svg viewBox="0 0 100 100"><path d="M40 85 Q40 55 65 30 L70 25"></path><path d="M50 25 L70 25 L70 45"></path></svg>`,
+                'slight-left': `<svg viewBox="0 0 100 100"><path d="M60 85 Q60 55 35 30 L30 25"></path><path d="M50 25 L30 25 L30 45"></path></svg>`,
+                'sharp-right': `<svg viewBox="0 0 100 100"><path d="M25 80 V50 A20 20 0 0 1 45 30 H55 A20 20 0 0 1 75 50 V60"></path><path d="M60 45 L75 60 L90 45"></path></svg>`,
+                'sharp-left': `<svg viewBox="0 0 100 100"><path d="M75 80 V50 A20 20 0 0 0 55 30 H45 A20 20 0 0 0 25 50 V60"></path><path d="M10 45 L25 60 L40 45"></path></svg>`,
+                'uturn-right': `<svg viewBox="0 0 100 100"><path d="M30 80 V45 A20 20 0 0 1 70 45 V65"></path><path d="M55 50 L70 65 L85 50"></path></svg>`,
+                'uturn-left': `<svg viewBox="0 0 100 100"><path d="M70 80 V45 A20 20 0 0 0 30 45 V65"></path><path d="M15 50 L30 65 L45 50"></path></svg>`,
+                'straight': `<svg viewBox="0 0 100 100"><path d="M50 85 L50 15"></path><path d="M35 30 L50 15 L65 30"></path></svg>`,
+                'merge': `<svg viewBox="0 0 100 100"><path d="M35 35 L50 20 L65 35"></path><path d="M50 20 L50 55"></path><path d="M50 55 L25 85"></path><path d="M50 55 L75 85"></path></svg>`,
+                'merge-right': `<svg viewBox="0 0 100 100"><path d="M35 35 L50 20 L65 35"></path><path d="M50 20 L50 85"></path><path d="M50 55 L25 85"></path></svg>`,
+                'merge-left': `<svg viewBox="0 0 100 100"><path d="M35 35 L50 20 L65 35"></path><path d="M50 20 L50 85"></path><path d="M50 55 L75 85"></path></svg>`,
+                'ramp-right': `<svg viewBox="0 0 100 100"><path d="M35 85 L35 15" stroke-opacity="0.4"></path><path d="M35 60 Q35 40 60 30 L75 25"></path><path d="M60 15 L75 25 L65 40"></path></svg>`,
+                'ramp-left': `<svg viewBox="0 0 100 100"><path d="M65 85 L65 15" stroke-opacity="0.4"></path><path d="M65 60 Q65 40 40 30 L25 25"></path><path d="M35 40 L25 25 L40 15"></path></svg>`,
+                'fork-right': `<svg viewBox="0 0 100 100"><path d="M50 55 Q50 35 25 25" stroke-opacity="0.4"></path><path d="M50 90 L50 55 Q50 35 75 25"></path><path d="M60 20 L75 25 L70 40"></path></svg>`,
+                'fork-left': `<svg viewBox="0 0 100 100"><path d="M50 55 Q50 35 75 25" stroke-opacity="0.4"></path><path d="M50 90 L50 55 Q50 35 25 25"></path><path d="M30 40 L25 25 L40 20"></path></svg>`,
+                'roundabout': `<svg viewBox="0 0 100 100"><path d="M50 70 A 25 25 0 1 0 25 45 L 25 55"></path><path d="M15 45 L 25 55 L 35 45"></path></svg>`,
+                'arrive': `<svg viewBox="0 0 100 100"><path d="M50 85 C 50 85 25 55 25 35 A 25 25 0 1 1 75 35 C 75 55 50 85 50 85 Z"></path><circle cx="50" cy="35" r="10"></circle></svg>`
             };
 
             return svgMap[key] || svgMap['straight'];
         }
 
-        // --- Instructions & Real OSM Metadata ---
+        function getOrdinalSuffix(n) {
+            n = parseInt(n, 10);
+            if (isNaN(n)) return '';
+            const s = ["th", "st", "nd", "rd"];
+            const v = n % 100;
+            const suffix = s[(v - 20) % 10] || s[v] || s[0];
+            return `${n}${suffix}`;
+        }
+
+        // --- Helper: Find roundabout exit context (current or recent past) ---
+        function getRoundaboutContext(leg, currentIndex, text) {
+            if (!leg || !leg.steps || currentIndex < 0) return null;
+            
+            const lowerText = (text || '').toLowerCase();
+            const getExit = (step) => {
+                if(!step || !step.maneuver) return null;
+                const t = (step.maneuver.type || '').toLowerCase();
+                if (t === 'roundabout' || t === 'rotary') {
+                    return step.maneuver.exit || step.exit || (step.exits ? parseInt(step.exits, 10) : null);
+                }
+                return null;
+            };
+
+            // 1. Check current step (Entering or inside roundabout)
+            let exit = getExit(leg.steps[currentIndex]);
+            if (exit) return { label: getOrdinalSuffix(exit) };
+
+            // 2. Check if we are exiting the roundabout (look backwards)
+            // LRM often splits "Enter" and "Exit" into steps. If we are at "Exit", we need the exit number from the entry step.
+            const isExiting = lowerText.includes('exit') && (lowerText.includes('roundabout') || lowerText.includes('rotary'));
+            
+            if (isExiting) {
+                // Look back a few steps to find the roundabout entry
+                for (let i = 1; i <= 3; i++) {
+                    const prevIndex = currentIndex - i;
+                    if (prevIndex >= 0) {
+                        exit = getExit(leg.steps[prevIndex]);
+                        if (exit) return { label: getOrdinalSuffix(exit) };
+                    }
+                }
+            }
+            return null;
+        }
+
         function updateInstructions(idx, currPos) {
             const instr = routeInstructions.find(i => i.index >= idx) || routeInstructions[routeInstructions.length - 1];
             if(!instr) return;
 
-            // 1. Text & Distance
             let text = instr.text;
             if(text.includes('Head')) text = "Continue straight";
-            
-            // --- British English Localization ---
             text = text.replace(/traffic circle/gi, "roundabout");
             text = text.replace(/center/gi, "centre");
 
             document.getElementById('nav-step').textContent = text;
             
-            // --- Path-based Distance Calculation ---
             let d = 0;
             const destIndex = Math.min(instr.index, routeCoords.length - 1);
             const nextIndex = Math.min(idx + 1, routeCoords.length - 1);
@@ -992,27 +832,39 @@
                 d = map.distance(currPos, routeCoords[destIndex]);
             }
 
+            // FIX: Distance Formatting (1km+ / 100m steps / 10m steps)
             let distText;
             if (d >= 1000) {
                 distText = (d / 1000).toFixed(1) + " km";
             } else if (d >= 100) {
-                distText = (Math.round(d / 100) * 100) + " m";
+                // Starting 900m down to 100m -> Steps of 100m
+                distText = (Math.floor(d / 100) * 100) + " m";
             } else {
-                distText = (Math.round(d / 10) * 10) + " m";
+                // < 100m -> Steps of 10m
+                distText = (Math.floor(d / 10) * 10) + " m";
             }
             document.getElementById('nav-dist').textContent = distText;
 
-            // 3. REAL OSM DATA Extraction (Lanes/Exit Info) + Sign rendering
             let rawStep = null;
+
+            const roundaboutExitLabelEl = document.getElementById('roundabout-exit-label');
+            roundaboutExitLabelEl.classList.add('hidden');
+            roundaboutExitLabelEl.textContent = '';
 
             if(rawRouteData && rawRouteData.routes && rawRouteData.routes[0].legs) {
                 const leg = rawRouteData.routes[0].legs[0];
                 const instrIdx = routeInstructions.indexOf(instr);
                 
+                // FIX: Check context for roundabout label
+                const rbContext = getRoundaboutContext(leg, instrIdx, text);
+                if (rbContext && rbContext.label) {
+                    roundaboutExitLabelEl.textContent = rbContext.label;
+                    roundaboutExitLabelEl.classList.remove('hidden');
+                }
+
                 if (instrIdx !== -1 && leg.steps[instrIdx]) {
                     rawStep = leg.steps[instrIdx];
 
-                    // Ref / Exit
                     const shieldEl = document.getElementById('road-shield');
                     const exitEl = document.getElementById('exit-badge');
                     
@@ -1032,7 +884,6 @@
                         exitEl.classList.add('hidden');
                     }
 
-                    // Lanes
                     let foundLanes = false;
                     if(rawStep.intersections && rawStep.intersections.length > 0) {
                         const intersection = rawStep.intersections[0];
@@ -1054,12 +905,10 @@
                 document.getElementById('nav-road-info').classList.add('hidden');
             }
 
-            // 4. Navigation Sign Icon (depends on maneuver)
             const iconEl = document.getElementById('nav-icon');
             iconEl.innerHTML = getNavSignSvg(rawStep, instr, text);
         }
 
-        // Render REAL OSRM Lanes Only
         function renderRealLanes(osrmLanes) {
             const container = document.getElementById('nav-lanes');
             container.innerHTML = '';
@@ -1068,14 +917,21 @@
             osrmLanes.forEach(lane => {
                 const el = document.createElement('div');
                 const isActive = lane.valid;
-                // Map OSRM indication to icon
                 let icon = 'ph-arrow-up';
                 if(lane.indications) {
-                    if(lane.indications.includes('right')) icon = 'ph-arrow-bend-up-right';
-                    else if(lane.indications.includes('left')) icon = 'ph-arrow-bend-up-left';
-                    else if(lane.indications.includes('straight')) icon = 'ph-arrow-up';
-                    else if(lane.indications.includes('slight right')) icon = 'ph-arrow-up-right';
-                    else if(lane.indications.includes('slight left')) icon = 'ph-arrow-up-left';
+                    const straight = lane.indications.includes('straight');
+                    const right = lane.indications.includes('right');
+                    const left = lane.indications.includes('left');
+                    const slightRight = lane.indications.includes('slight right');
+                    const slightLeft = lane.indications.includes('slight left');
+
+                    if (straight && right) icon = 'ph-arrow-up-right'; 
+                    else if (straight && left) icon = 'ph-arrow-up-left'; 
+                    else if(right) icon = 'ph-arrow-bend-up-right';
+                    else if(left) icon = 'ph-arrow-bend-up-left';
+                    else if(straight) icon = 'ph-arrow-up';
+                    else if(slightRight) icon = 'ph-arrow-up-right';
+                    else if(slightLeft) icon = 'ph-arrow-up-left';
                     else if(lane.indications.includes('u-turn')) icon = 'ph-arrow-u-up-left';
                 }
 
@@ -1088,14 +944,13 @@
         function stopNavigation() {
             isNavigating = false;
             cancelAnimationFrame(animationFrameId);
-            if(speedLimitInterval) clearInterval(speedLimitInterval); // Stop polling
+            if(speedLimitInterval) clearInterval(speedLimitInterval); 
             document.getElementById('map').style.transform = '';
             
             document.getElementById('explore-ui').classList.remove('-translate-y-full');
             document.getElementById('nav-header').classList.add('-translate-y-[150%]');
             document.getElementById('nav-footer').classList.add('translate-y-[150%]');
             
-            // RESET CONTROLS (remove all translations)
             const controls = document.getElementById('map-controls');
             controls.classList.remove('-translate-y-[250px]');
             controls.classList.remove('-translate-y-[200px]');
@@ -1104,13 +959,13 @@
             document.getElementById('trip-card').classList.remove('translate-y-[110%]');
             document.getElementById('trip-card').classList.add('translate-y-0');
             
-            // Move controls up slightly for trip card
             controls.classList.add('-translate-y-[200px]');
 
-            // Clean up inner nav UI bits
             document.getElementById('speed-limit').classList.add('hidden');
             document.getElementById('nav-lanes').classList.add('hidden');
             document.getElementById('nav-road-info').classList.add('hidden');
+            document.getElementById('roundabout-exit-label').classList.add('hidden');
+            document.getElementById('roundabout-exit-label').textContent = '';
 
             if(userMarker) {
                 const ll = userMarker.getLatLng();
@@ -1129,12 +984,10 @@
         function clearMapState() {
             if(isNavigating) stopNavigation();
             
-            // Force Hide Nav Elements
             document.getElementById('nav-header').classList.add('-translate-y-[150%]');
             document.getElementById('nav-footer').classList.add('translate-y-[150%]');
             document.getElementById('explore-ui').classList.remove('-translate-y-full');
             
-            // RESET CONTROLS FULLY
             const controls = document.getElementById('map-controls');
             controls.classList.remove('-translate-y-[250px]');
             controls.classList.remove('-translate-y-[200px]');
