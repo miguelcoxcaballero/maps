@@ -64,30 +64,21 @@
         .leaflet-routing-container { display: none !important; }
 
         /* Custom Markers */
-        /* General markers float gently */
         .leaflet-marker-icon { transition: transform 0.2s linear; }
         
-        /* Navigation Arrow must move INSTANTLY to stay pinned to the camera. */
-        .leaflet-marker-icon.nav-arrow-icon {
-            transition: none !important;
-        }
+        /* Navigation Arrow */
+        .leaflet-marker-icon.nav-arrow-icon { transition: none !important; }
         
-        /* Navigation Arrow Container */
-        .arrow-icon-inner {
-            transform-origin: center;
-            will-change: transform;
-        }
+        .arrow-icon-inner { transform-origin: center; will-change: transform; }
 
         /* Material UI Shadows */
-        .shadow-google {
-            box-shadow: 0 1px 2px rgba(60,64,67,0.3), 0 2px 6px 2px rgba(60,64,67,0.15);
-        }
+        .shadow-google { box-shadow: 0 1px 2px rgba(60,64,67,0.3), 0 2px 6px 2px rgba(60,64,67,0.15); }
 
-        /* Scrollbar hiding for Chips */
+        /* Scrollbar hiding */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* Speed Limit Sign (European Style) - UPDATED LARGER */
+        /* Speed Limit Sign */
         .speed-limit-sign {
             width: 80px; 
             height: 80px; 
@@ -105,7 +96,7 @@
             z-index: 1100;
         }
 
-        /* Road Badges - UPDATED LARGER */
+        /* Road Badges */
         .road-shield {
             background-color: #1967d2;
             color: white;
@@ -146,6 +137,55 @@
             background-color: rgba(66, 133, 244, 0.4);
             animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
         }
+
+        /* Header Layout Updates for Animated Lanes */
+        #nav-header-content {
+            background-color: #0F9D58;
+            color: white;
+            padding: 2.5rem;
+            border-radius: 0 0 50px 50px;
+            position: relative;
+            z-index: 20;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+        }
+        @media (min-width: 768px) {
+            #nav-header-content { border-radius: 1.5rem; }
+        }
+
+        /* Animated Lanes Drawer */
+        #nav-lanes {
+            background-color: #0A6F3C; /* Darker Green */
+            color: white;
+            position: absolute;
+            top: 100%;
+            left: 20px; 
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 0 0 20px 20px;
+            z-index: 10;
+            transform: translateY(-100%);
+            opacity: 0;
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+            pointer-events: none;
+        }
+
+        #nav-lanes.show-lanes {
+            transform: translateY(-20px); /* Hangs out below header */
+            opacity: 1;
+        }
+
+        /* Elongated Lane Arrows */
+        .lane-icon {
+            display: inline-block;
+            transform: scaleY(1.6) scaleX(1.1);
+            font-size: 2.2rem;
+            line-height: 1;
+        }
+        .lane-dimmed { opacity: 0.3; }
 
         /* Navigation Sign SVG styling INSIDE the green header box */
         #nav-icon svg {
@@ -189,32 +229,35 @@
     <!-- ========================================== -->
     <!-- TOP NAVIGATION HEADER (NAV MODE)           -->
     <!-- ========================================== -->
-    <div id="nav-header" class="map-ui absolute top-0 left-0 right-0 bg-[#0F9D58] text-white p-10 shadow-[0_10px_15px_-3px_rgba(0,0,0,0.1),0_4px_6px_-4px_rgba(0,0,0,0.1)] transform -translate-y-[150%] transition-transform duration-300 z-50 rounded-b-[50px] md:max-w-md md:left-6 md:top-6 md:rounded-3xl md:right-auto overflow-hidden">
+    <div id="nav-header" class="map-ui absolute top-0 left-0 right-0 transform -translate-y-[150%] transition-transform duration-300 z-50 md:max-w-md md:left-6 md:top-6 md:right-auto pointer-events-none">
         
-        <!-- Road Info Badge Row -->
-        <div id="nav-road-info" class="flex items-center gap-3 mb-4 hidden">
-            <div id="road-shield" class="road-shield hidden"></div>
-            <div id="exit-badge" class="exit-badge hidden">
-                <i class="ph-bold ph-arrow-elbow-right-up text-xl"></i> <span id="exit-text"></span>
-            </div>
-        </div>
-
-        <div class="flex items-start gap-6 relative z-10">
-            <div class="mt-1 flex flex-col items-center justify-start">
-                <!-- GREEN BOX SIGN -->
-                <div id="nav-icon" class="w-20 h-20 flex items-center justify-center">
+        <!-- Main Green Content Card -->
+        <div id="nav-header-content" class="pointer-events-auto">
+            <!-- Road Info Badge Row -->
+            <div id="nav-road-info" class="flex items-center gap-3 mb-4 hidden">
+                <div id="road-shield" class="road-shield hidden"></div>
+                <div id="exit-badge" class="exit-badge hidden">
+                    <i class="ph-bold ph-arrow-elbow-right-up text-xl"></i> <span id="exit-text"></span>
                 </div>
-                <!-- ROUNDABOUT EXIT LABEL (big white text) -->
-                <div id="roundabout-exit-label" class="mt-1 text-white text-4xl font-black leading-none tracking-tight hidden"></div>
             </div>
-            <div class="flex-1 min-w-0">
-                <div id="nav-dist" class="text-5xl font-bold mb-2">0 m</div>
-                <div id="nav-step" class="text-2xl font-medium leading-tight">Starting navigation...</div>
+
+            <div class="flex items-start gap-6 relative z-10">
+                <div class="mt-1 flex flex-col items-center justify-start">
+                    <!-- GREEN BOX SIGN -->
+                    <div id="nav-icon" class="w-20 h-20 flex items-center justify-center"></div>
+                    <!-- ROUNDABOUT EXIT LABEL -->
+                    <div id="roundabout-exit-label" class="mt-1 text-white text-4xl font-black leading-none tracking-tight hidden"></div>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div id="nav-dist" class="text-5xl font-bold mb-2">0 m</div>
+                    <div id="nav-step" class="text-2xl font-medium leading-tight">Starting navigation...</div>
+                </div>
             </div>
         </div>
 
-        <!-- Lanes Container -->
-        <div id="nav-lanes" class="flex items-center gap-4 mt-6 pt-4 border-t border-white/20 relative z-10 hidden">
+        <!-- Lanes Container (Hangs out from bottom) -->
+        <div id="nav-lanes">
+            <!-- Dynamic lanes injected here -->
         </div>
     </div>
 
@@ -680,7 +723,8 @@
             
             let timeStr = m + " min";
             if (h > 0) timeStr = h + " hr " + m + " min";
-            if (remainingSeconds < 60) timeStr = "< 1 min";
+            // UPDATED: Use "0 min" instead of "< 1 min"
+            if (remainingSeconds < 60) timeStr = "0 min";
 
             document.getElementById('nav-footer-time').textContent = timeStr;
             document.getElementById('nav-footer-dist').textContent = (remainingDist / 1000).toFixed(1) + " km";
@@ -885,7 +929,8 @@
                     }
 
                     let foundLanes = false;
-                    if(rawStep.intersections && rawStep.intersections.length > 0) {
+                    // UPDATED: Only show lanes if distance < 3km (3000m)
+                    if(d < 3000 && rawStep.intersections && rawStep.intersections.length > 0) {
                         const intersection = rawStep.intersections[0];
                         if(intersection.lanes && intersection.lanes.length > 0) {
                             renderRealLanes(intersection.lanes);
@@ -894,14 +939,14 @@
                     }
                     
                     if (!foundLanes) {
-                        document.getElementById('nav-lanes').classList.add('hidden');
+                        document.getElementById('nav-lanes').classList.remove('show-lanes');
                     }
                 } else {
-                    document.getElementById('nav-lanes').classList.add('hidden');
+                    document.getElementById('nav-lanes').classList.remove('show-lanes');
                     document.getElementById('nav-road-info').classList.add('hidden');
                 }
             } else {
-                document.getElementById('nav-lanes').classList.add('hidden');
+                document.getElementById('nav-lanes').classList.remove('show-lanes');
                 document.getElementById('nav-road-info').classList.add('hidden');
             }
 
