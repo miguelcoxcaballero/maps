@@ -912,14 +912,14 @@
                     <svg viewBox="0 0 100 100">
                         <path d="M35 35 L50 20 L65 35"></path>
                         <path d="M50 20 L50 85"></path>
-                        <path d="M50 55 L75 85"></path>
+                        <path d="M50 55 L25 85"></path>
                     </svg>
                 `,
                 'merge-left': `
                     <svg viewBox="0 0 100 100">
                         <path d="M35 35 L50 20 L65 35"></path>
                         <path d="M50 20 L50 85"></path>
-                        <path d="M50 55 L25 85"></path>
+                        <path d="M50 55 L75 85"></path>
                     </svg>
                 `,
                 'ramp-right': `
@@ -995,7 +995,15 @@
                 d = map.distance(currPos, routeCoords[destIndex]);
             }
 
-            document.getElementById('nav-dist').textContent = d > 1000 ? (d/1000).toFixed(1) + " km" : Math.round(d) + " m";
+            let distText;
+            if (d >= 1000) {
+                distText = (d / 1000).toFixed(1) + " km";
+            } else if (d >= 100) {
+                distText = (Math.round(d / 100) * 100) + " m";
+            } else {
+                distText = (Math.round(d / 10) * 10) + " m";
+            }
+            document.getElementById('nav-dist').textContent = distText;
 
             // 3. REAL OSM DATA Extraction (Lanes/Exit Info) + Sign rendering
             let rawStep = null;
