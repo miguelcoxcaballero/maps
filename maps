@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Maps</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Roboto -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+    <!-- Phosphor Icons (Material-like) -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        /* Base Settings */
+        body, html { 
+            height: 100%; 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+            background-color: #f8f9fa; 
+            font-family: 'Roboto', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --nav-sign-green: #0F9D58;
+            --nav-sign-icon: #ffffff;
+        }
+        
+        /* Map & 3D Wrapper */
+        #map-wrapper {
+            height: 100%;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            perspective: 1200px;
+            overflow: hidden;
+        }
+
+        #map { 
+            height: 250%; 
+            width: 250%; 
+            position: absolute;
+            top: -75%;
+            left: -75%;
+            background: #e5e7eb;
+            transform-origin: center center;
+            will-change: transform;
+        }
+        
+        .map-ui { z-index: 1000; }
+
+        /* Hide Leaflet Controls */
+        .leaflet-control-zoom, .leaflet-control-attribution { display: none; }
+        .leaflet-routing-container { display: none !important; }
+
+        /* Custom Markers */
+        /* General markers float gently */
+        .leaflet-marker-icon { transition: transform 0.2s linear; }
+        
+        /* Navigation Arrow must move INSTANTLY to stay pinned to the camera. */
+        .leaflet-marker-icon.nav-arrow-icon {
+            transition: none !important;
+        }
+        
+        /* Navigation Arrow Container */
+        .arrow-icon-inner {
+            transform-origin: center;
+            will-change: transform;
+        }
+
+        /* Material UI Shadows */
+        .shadow-google {
+            box-shadow: 0 1px 2px rgba(60,64,67,0.3), 0 2px 6px 2px rgba(60,64,67,0.15);
+        }
+
+        /* Scrollbar hiding for Chips */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Speed Limit Sign (European Style) - UPDATED LARGER */
+        .speed-limit-sign {
+            width: 80px; /* Increased from 52px */
+            height: 80px; /* Increased from 52px */
+            background: white;
+            border: 6px solid #cc0000;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Roboto', sans-serif;
+            font-weight: 900;
+            font-size: 32px; /* Increased from 22px */
+            color: #222;
+            /* UPDATED: Stronger, softer shadow matching the new header/footer style */
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+            z-index: 1100;
+        }
+
+        /* Road Badges - UPDATED LARGER */
+        .road-shield {
+            background-color: #1967d2;
+            color: white;
+            padding: 4px 12px; /* Increased padding */
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 1.3rem; /* Increased from 0.85rem */
+            display: inline-block;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        
+        .exit-badge {
+            background-color: #188038;
+            color: white;
+            padding: 4px 10px; /* Increased padding */
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 1.1rem; /* Increased from 0.75rem */
+            text-transform: uppercase;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid rgba(255,255,255,0.4);
+        }
+
+        /* Pulse for User Location */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.33); opacity: 0.8; }
+            80%, 100% { opacity: 0; transform: scale(1.5); }
+        }
+        .user-pulse::before {
+            content: '';
+            position: absolute;
+            height: 40px; width: 40px;
+            left: -12px; top: -12px;
+            border-radius: 50%;
+            background-color: rgba(66, 133, 244, 0.4);
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        /* Navigation Sign SVG styling INSIDE the green header box */
+        #nav-icon svg {
+            width: 80px;
+            height: 80px;
+            fill: none;
+            stroke: var(--nav-sign-icon);
+            stroke-width: 8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div id="map-wrapper">
+        <div id="map"></div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TOP SEARCH BAR (EXPLORE MODE)              -->
+    <!-- ========================================== -->
+    <div id="explore-ui" class="map-ui absolute top-0 left-0 right-0 p-4 transition-transform duration-300 pointer-events-none">
+        
+        <!-- Search Pill -->
+        <div class="w-full md:w-96 relative z-50 pointer-events-auto">
+            <div class="bg-white rounded-full h-12 shadow-google flex items-center px-6 transition-all" id="search-box">
+                <i class="ph-bold ph-magnifying-glass text-gray-400 text-xl mr-3"></i>
+                <input type="text" id="search-input" 
+                       placeholder="Search here" 
+                       class="flex-1 bg-transparent outline-none text-base text-gray-700 placeholder-gray-500 font-normal h-full"
+                       autocomplete="off" onkeypress="handleEnter(event)">
+            </div>
+
+            <!-- Search Results Dropdown -->
+            <div id="search-results" class="hidden absolute top-14 left-0 right-0 bg-white rounded-xl shadow-google overflow-hidden max-h-[60vh] overflow-y-auto z-50">
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TOP NAVIGATION HEADER (NAV MODE)           -->
+    <!-- ========================================== -->
+    <!-- UPDATED: Changed shadow to a strong, multi-layered downward shadow -->
+    <div id="nav-header" class="map-ui absolute top-0 left-0 right-0 bg-[#0F9D58] text-white p-10 shadow-[0_10px_15px_-3px_rgba(0,0,0,0.1),0_4px_6px_-4px_rgba(0,0,0,0.1)] transform -translate-y-[150%] transition-transform duration-300 z-50 rounded-b-[50px] md:max-w-md md:left-6 md:top-6 md:rounded-3xl md:right-auto overflow-hidden">
+        
+        <!-- Road Info Badge Row -->
+        <div id="nav-road-info" class="flex items-center gap-3 mb-4 hidden">
+            <div id="road-shield" class="road-shield hidden"></div>
+            <div id="exit-badge" class="exit-badge hidden">
+                <i class="ph-bold ph-arrow-elbow-right-up text-xl"></i> <span id="exit-text"></span>
+            </div>
+        </div>
+
+        <div class="flex items-start gap-6 relative z-10">
+            <div class="mt-1">
+                <!-- GREEN BOX SIGN: SVG injected dynamically based on maneuver -->
+                <div id="nav-icon" class="w-20 h-20 flex items-center justify-center">
+                    <!-- SVG sign will be injected here -->
+                </div>
+            </div>
+            <div class="flex-1 min-w-0">
+                <div id="nav-dist" class="text-5xl font-bold mb-2">0 m</div>
+                <div id="nav-step" class="text-2xl font-medium leading-tight truncate">Starting navigation...</div>
+            </div>
+        </div>
+
+        <!-- Lanes Container -->
+        <div id="nav-lanes" class="flex items-center gap-4 mt-6 pt-4 border-t border-white/20 relative z-10 hidden">
+            <!-- Dynamic lanes injected here -->
+        </div>
+
+        <!-- Decorative Pattern -->
+        <div class="absolute right-0 bottom-0 opacity-10 pointer-events-none">
+            <i class="ph-fill ph-navigation-arrow text-9xl transform translate-x-1/4 translate-y-1/4"></i>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- FLOATING ACTION BUTTONS                    -->
+    <!-- ========================================== -->
+    <div id="map-controls" class="map-ui absolute bottom-32 right-4 flex flex-col gap-3 transition-transform duration-300 items-end z-[900]">
+        
+        <button onclick="handleLocate()" class="bg-white w-14 h-14 rounded-full shadow-google flex items-center justify-center text-gray-600 hover:text-blue-600 transition active:scale-95">
+            <i class="ph-fill ph-crosshair text-2xl"></i>
+        </button>
+        <button onclick="map.setZoom(map.getZoom() + 1)" class="bg-white w-14 h-14 rounded-full shadow-google hidden md:flex items-center justify-center text-gray-600 hover:text-blue-600 transition active:scale-95">
+            <i class="ph ph-plus text-xl"></i>
+        </button>
+        <button onclick="map.setZoom(map.getZoom() - 1)" class="bg-white w-14 h-14 rounded-full shadow-google hidden md:flex items-center justify-center text-gray-600 hover:text-blue-600 transition active:scale-95">
+            <i class="ph ph-minus text-xl"></i>
+        </button>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- BOTTOM SHEET (TRIP DETAILS)                -->
+    <!-- ========================================== -->
+    <div id="trip-card" class="map-ui absolute bottom-0 left-0 right-0 bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.1)] transform translate-y-[110%] transition-transform duration-300 rounded-t-3xl md:w-96 md:left-4 md:bottom-4 md:rounded-2xl md:shadow-google z-50">
+        
+        <!-- Drag Handle (Mobile Visual) -->
+        <div class="w-full flex justify-center pt-3 pb-1 md:hidden">
+            <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
+        </div>
+
+        <div class="p-5">
+            <!-- Header: Time & Distance -->
+            <div class="flex items-baseline justify-between mb-4">
+                <div class="flex items-baseline gap-2">
+                    <span id="route-time" class="text-2xl font-bold text-[#188038]">-- min</span>
+                    <span id="route-dist" class="text-gray-500 font-medium">(-- km)</span>
+                </div>
+                <div class="bg-blue-50 text-blue-700 px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wide">
+                    Fastest
+                </div>
+            </div>
+
+            <!-- Destination Info -->
+            <div class="flex items-center gap-4 mb-6">
+                <div class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                    <i class="ph-fill ph-map-pin text-red-500 text-xl"></i>
+                </div>
+                <div class="min-w-0">
+                    <div id="route-dest" class="font-medium text-gray-900 truncate text-lg">Destination</div>
+                    <div class="text-sm text-gray-500 truncate">Typically light traffic</div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-3">
+                <button id="close-trip-btn" onclick="clearMapState()" class="flex-1 py-3 rounded-full border border-gray-300 font-medium text-gray-700 hover:bg-gray-50 transition active:bg-gray-100">
+                    Cancel
+                </button>
+                <button id="start-btn" onclick="startNavigation()" class="flex-[2] bg-[#4285F4] hover:bg-[#3367d6] text-white font-bold py-3 rounded-full shadow-md transition flex items-center justify-center gap-2 active:shadow-none active:scale-[0.98]">
+                    <i class="ph-bold ph-navigation-arrow text-lg -rotate-45"></i> Start
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- BOTTOM BAR (NAV ACTIVE)                    -->
+    <!-- ========================================== -->
+    <!-- UPDATED: Changed shadow to a strong, multi-layered UPWARD shadow to match the style -->
+    <div id="nav-footer" class="map-ui absolute bottom-0 left-0 right-0 bg-white p-10 rounded-t-[50px] shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1),0_-4px_6px_-4px_rgba(0,0,0,0.1)] transform translate-y-[150%] transition-transform duration-300 flex items-center justify-between z-[1000] md:max-w-md md:left-6 md:bottom-6 md:rounded-3xl md:right-auto md:shadow-google">
+        
+        <!-- Speed Limit Sign -->
+        <!-- UPDATED: Adjusted position for larger size (-top-28) -->
+        <div id="speed-limit" class="speed-limit-sign hidden absolute -top-28 left-10 transform transition-all hover:scale-105">
+            <span id="speed-val">50</span>
+        </div>
+
+        <div>
+            <div class="text-[#188038] font-bold text-4xl mb-1" id="nav-footer-time">0 min</div>
+            <div class="text-gray-500 text-lg">
+                <span id="nav-footer-dist">0 km</span> • <span id="nav-footer-eta">12:00 PM</span>
+            </div>
+        </div>
+        <button onclick="stopNavigation()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-10 py-5 rounded-full font-bold text-lg uppercase tracking-wide transition">
+            Exit
+        </button>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="map-ui absolute top-2/3 left-1/2 -translate-x-1/2 bg-[#323232] text-white px-6 py-3 rounded-full text-sm font-normal shadow-lg opacity-0 transition-all duration-300 pointer-events-none transform translate-y-4">
+        Message
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+    <script>
+        // --- Setup ---
+        // UPDATED: Start in Murcia
+        const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([37.9922, -1.1307], 14);
+        
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; CARTO',
+            subdomains: 'abcd',
+            maxZoom: 20
+        }).addTo(map);
+
+        // --- State ---
+        let userLocation = null, destLocation = null;
+        let routingControl = null;
+        let userMarker = null, destMarker = null;
+        let routeCoords = [], routeInstructions = [];
+        let routeDistanceIndex = []; // NEW: For O(1) distance calc
+        // UPDATED: Added global to store total trip time for ETA calc
+        let totalRouteSeconds = 0;
+        let rawRouteData = null; 
+        let isNavigating = false;
+        let animationFrameId = null;
+        let currentVisualHeading = 0; // used as current MAP heading (camera)
+        let speedLimitInterval = null; 
+        const FALLBACK_COORDS = { lat: 37.9922, lng: -1.1307 };
+        const LOOKAHEAD_METERS = 10; // ARROW MUST POINT TO POSITION 10M AHEAD
+
+        // --- Icons ---
+        const createIcon = (type) => {
+            if (type === 'user') {
+                return L.divIcon({
+                    className: 'user-pulse',
+                    html: `<div class="w-5 h-5 bg-[#4285F4] border-[3px] border-white rounded-full shadow-md relative z-10"></div>`,
+                    iconSize: [20, 20], iconAnchor: [10, 10]
+                });
+            } else if (type === 'arrow') {
+                return L.divIcon({
+                    className: 'nav-arrow-icon',
+                    html: `
+                        <div class="arrow-icon-inner" style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;">
+                            <svg width="50" height="50" viewBox="0 0 50 50" fill="none">
+                                <circle cx="25" cy="25" r="20" fill="#4285F4" stroke="white" stroke-width="3" class="shadow-lg"></circle>
+                                <path d="M25 12L32 30L25 26L18 30L25 12Z" fill="white"></path>
+                            </svg>
+                        </div>`,
+                    iconSize: [50, 50], iconAnchor: [25, 25]
+                });
+            } else {
+                return L.divIcon({
+                    className: 'custom-pin',
+                    html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#EA4335" class="drop-shadow-lg w-10 h-10"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"></path><circle cx="12" cy="9" r="2.5" fill="#751510"></circle></svg>`,
+                    iconSize: [40, 40], iconAnchor: [20, 40], popupAnchor: [0, -42]
+                });
+            }
+        };
+
+        // --- Core Interactions ---
+        map.on('click', e => { 
+            if(!isNavigating) {
+                document.getElementById('search-results').classList.add('hidden');
+                setDestination(e.latlng, "Dropped Pin"); 
+            }
+        });
+
+        function setDestination(latlng, name) {
+            destLocation = latlng;
+            if(destMarker) map.removeLayer(destMarker);
+            destMarker = L.marker(latlng, {icon: createIcon('dest')}).addTo(map);
+            const shortName = name.split(',')[0];
+            document.getElementById('route-dest').textContent = shortName;
+            document.getElementById('search-input').value = shortName;
+            if(userLocation) calculateRoute();
+            else handleLocate(true);
+        }
+
+        function handleLocate(autoRoute = false) {
+            if(isNavigating) return;
+            if(!navigator.geolocation) return useFallback(autoRoute);
+            showToast("Locating you...");
+            navigator.geolocation.getCurrentPosition(
+                pos => updateUserLoc(pos.coords.latitude, pos.coords.longitude, autoRoute),
+                () => useFallback(autoRoute), 
+                { timeout: 5000, enableHighAccuracy: true }
+            );
+        }
+
+        function useFallback(auto) { 
+            updateUserLoc(FALLBACK_COORDS.lat, FALLBACK_COORDS.lng, auto, true); 
+        }
+
+        function updateUserLoc(lat, lng, auto, fallback) {
+            userLocation = L.latLng(lat, lng);
+            if(userMarker) map.removeLayer(userMarker);
+            userMarker = L.marker(userLocation, {icon: createIcon('user')}).addTo(map);
+            if(!auto) {
+                map.setView(userLocation, 15, { animate: true });
+                if(fallback) showToast("GPS failed. Welcome to Murcia!");
+            }
+            if(destLocation) calculateRoute();
+        }
+
+        // --- Route Calculation with Real OSRM Data ---
+        async function calculateRoute() {
+            if(!userLocation || !destLocation) return;
+            
+            if(routingControl) map.removeControl(routingControl);
+            
+            // Reset state
+            rawRouteData = null;
+
+            // 1. Fetch RAW OSRM Data (Rich metadata: lanes, maxspeed, exits, ref)
+            try {
+                const url = `https://router.project-osrm.org/route/v1/driving/${userLocation.lng},${userLocation.lat};${destLocation.lng},${destLocation.lat}?overview=full&steps=true&geometries=geojson&annotations=true`;
+                const response = await fetch(url);
+                rawRouteData = await response.json();
+            } catch(e) {
+                console.error("OSM Fetch Error", e);
+            }
+            
+            // 2. Setup Leaflet Routing Machine (Visuals)
+            routingControl = L.Routing.control({
+                waypoints: [userLocation, destLocation],
+                router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1', profile: 'driving' }),
+                lineOptions: { 
+                    styles: [
+                        {color: '#1557b0', opacity: 0.4, weight: 13}, 
+                        {color: '#4285F4', opacity: 1, weight: 9, lineCap: 'round', lineJoin: 'round'}
+                    ],
+                    addWaypoints: false 
+                },
+                createMarker: () => null,
+                addWaypoints: false, draggableWaypoints: false, fitSelectedRoutes: true,
+                show: false 
+            }).on('routesfound', e => {
+                const route = e.routes[0];
+                routeCoords = route.coordinates;
+                routeInstructions = route.instructions; 
+
+                // NEW: Pre-calculate cumulative distances for O(1) path length calculation
+                routeDistanceIndex = [0];
+                let totalDist = 0;
+                for(let i = 0; i < routeCoords.length - 1; i++) {
+                    totalDist += map.distance(routeCoords[i], routeCoords[i+1]);
+                    routeDistanceIndex.push(totalDist);
+                }
+                
+                // Parse Time
+                totalRouteSeconds = route.summary.totalTime;
+                const hours = Math.floor(totalRouteSeconds / 3600);
+                const mins = Math.round((totalRouteSeconds % 3600) / 60);
+                let timeStr = mins + " min";
+                if(hours > 0) timeStr = hours + " hr " + mins + " min";
+                
+                const km = (route.summary.totalDistance / 1000).toFixed(1);
+                
+                // Update UI
+                document.getElementById('route-time').textContent = timeStr;
+                document.getElementById('route-dist').textContent = `(${km} km)`;
+                document.getElementById('nav-footer-time').textContent = timeStr;
+                document.getElementById('nav-footer-dist').textContent = km + " km";
+                
+                const now = new Date();
+                now.setSeconds(now.getSeconds() + totalRouteSeconds);
+                document.getElementById('nav-footer-eta').textContent = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+                document.getElementById('trip-card').classList.remove('translate-y-[110%]');
+                document.getElementById('trip-card').classList.add('translate-y-0');
+                
+                // MOVE CONTROLS UP to avoid Trip Card
+                document.getElementById('map-controls').classList.add('-translate-y-[200px]');
+            }).addTo(map);
+        }
+
+        // --- Navigation Logic ---
+        function startNavigation() {
+            if(!routeCoords.length) return;
+            isNavigating = true;
+            
+            document.getElementById('explore-ui').classList.add('-translate-y-full');
+            document.getElementById('trip-card').classList.add('translate-y-[110%]');
+            document.getElementById('trip-card').classList.remove('translate-y-0');
+            
+            // ADJUST CONTROLS for Nav Footer (Move UP, not down)
+            const controls = document.getElementById('map-controls');
+            controls.classList.remove('translate-y-[200px]'); // Safety remove old down-shift
+            controls.classList.add('-translate-y-[250px]'); // Move UP above larger footer
+            
+            document.getElementById('nav-header').classList.remove('-translate-y-[150%]');
+            document.getElementById('nav-footer').classList.remove('translate-y-[150%]');
+            document.getElementById('map-wrapper').style.perspective = "1200px";
+            
+            if(userMarker) map.removeLayer(userMarker);
+            const startPos = routeCoords[0];
+            userMarker = L.marker(startPos, { icon: createIcon('arrow'), zIndexOffset: 1000 }).addTo(map);
+
+            const startLatLng = L.latLng(startPos.lat, startPos.lng);
+            const lookaheadPt = getLookaheadPoint(0, startLatLng, LOOKAHEAD_METERS);
+            
+            if (lookaheadPt) {
+                const bearing = getBearing(startPos.lat, startPos.lng, lookaheadPt.lat, lookaheadPt.lng);
+
+                // Map heading starts aligned with 10m-ahead direction
+                currentVisualHeading = bearing;
+
+                document.getElementById('map').style.transform = `rotateX(60deg) rotateZ(${-currentVisualHeading}deg) scale(2.0)`;
+                setTimeout(() => {
+                    const el = userMarker.getElement();
+                    if (el) {
+                        const inner = el.querySelector('.arrow-icon-inner');
+                        // ARROW EXACTLY ALONG 10M-AHEAD DIRECTION
+                        if(inner) inner.style.transform = `rotate(${bearing}deg)`;
+                    }
+                }, 0);
+                const offsetCenter = shiftLatLng(startPos.lat, startPos.lng, 25, currentVisualHeading);
+                map.setView(offsetCenter, 19, {animate: true});
+            } else {
+                currentVisualHeading = 0;
+                map.setZoom(19, {animate: true});
+            }
+
+            // Start polling for Real Speed Data
+            fetchSpeedLimit();
+            speedLimitInterval = setInterval(fetchSpeedLimit, 6000); // Check every 6s
+
+            animateRoute();
+        }
+
+        function shiftLatLng(lat, lng, meters, bearing) {
+            const R = 6378137;
+            const d = meters;
+            const brng = bearing * Math.PI / 180;
+            const phi1 = lat * Math.PI / 180;
+            const lam1 = lng * Math.PI / 180;
+            const phi2 = Math.asin(Math.sin(phi1) * Math.cos(d/R) + Math.cos(phi1) * Math.sin(d/R) * Math.cos(brng));
+            const lam2 = lam1 + Math.atan2(Math.sin(brng) * Math.sin(d/R) * Math.cos(phi1), Math.cos(d/R) - Math.sin(phi1) * Math.sin(phi2));
+            return L.latLng(phi2 * 180 / Math.PI, lam2 * 180 / Math.PI);
+        }
+
+        function getLookaheadPoint(currentIndex, currentPosLatLng, lookaheadMeters) {
+            let distAcc = 0;
+            let prevLatLng = currentPosLatLng;
+            for (let i = currentIndex + 1; i < routeCoords.length; i++) {
+                const pt = routeCoords[i];
+                const nextLatLng = L.latLng(pt.lat, pt.lng);
+                const d = map.distance(prevLatLng, nextLatLng);
+                if (distAcc + d >= lookaheadMeters) {
+                    const ratio = (lookaheadMeters - distAcc) / d;
+                    const lat = prevLatLng.lat + (nextLatLng.lat - prevLatLng.lat) * ratio;
+                    const lng = prevLatLng.lng + (nextLatLng.lng - prevLatLng.lng) * ratio;
+                    return L.latLng(lat, lng);
+                }
+                distAcc += d;
+                prevLatLng = nextLatLng;
+            }
+            return routeCoords.length ? L.latLng(routeCoords[routeCoords.length-1]) : null;
+        }
+
+        // --- NEW ROBUST SPEED LIMIT FETCHER ---
+        async function fetchSpeedLimit() {
+            if(!isNavigating || !userMarker) return;
+            
+            const pos = userMarker.getLatLng();
+            
+            // Query remains robust to find the road
+            const query = `
+                [out:json];
+                way(around:35,${pos.lat},${pos.lng})
+                ["highway"~"^(motorway|trunk|primary|secondary|tertiary|residential|unclassified)$"];
+                out tags;
+            `;
+            
+            try {
+                const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                const speedEl = document.getElementById('speed-limit');
+
+                if (data.elements && data.elements.length > 0) {
+                    // Get the first element (closest usually)
+                    const tags = data.elements[0].tags;
+                    let speed = tags.maxspeed;
+                    
+                    if (speed) {
+                        // Explicit Speed Limit Found
+                        if (speed === 'none') {
+                            speedEl.classList.add('hidden');
+                            return;
+                        }
+                        
+                        const match = speed.match(/\d+/);
+                        if (match) {
+                            updateSpeedUI(match[0]);
+                            return;
+                        }
+                        
+                        // Text aliases (only if explicitly tagged in OSM)
+                        if (speed.includes('urban') || speed === 'ES:urban') updateSpeedUI('50');
+                        else if (speed.includes('rural')) updateSpeedUI('90');
+                        else if (speed.includes('motorway')) updateSpeedUI('120');
+                        else if (speed.includes('trunk')) updateSpeedUI('100');
+                        else speedEl.classList.add('hidden'); // Unknown text format
+                    } else {
+                        // No maxspeed tag present? Hide the sign. Do not guess.
+                        speedEl.classList.add('hidden');
+                    }
+                } else {
+                    // No road data found? Hide the sign.
+                    speedEl.classList.add('hidden');
+                }
+            } catch (e) {
+                console.warn("Overpass fetch failed", e);
+            }
+        }
+
+        function updateSpeedUI(val) {
+            const el = document.getElementById('speed-limit');
+            document.getElementById('speed-val').textContent = val;
+            el.classList.remove('hidden');
+        }
+
+        function animateRoute() {
+            let index = 0;
+            let startTime = null;
+            let currentSpeed = 500; 
+            
+            const lerp = (a, b, t) => a + (b - a) * t;
+            const shortestRot = (curr, target) => {
+                let d = (target - curr) % 360;
+                return curr + (d > 180 ? d - 360 : d < -180 ? d + 360 : d);
+            };
+
+            function angularDiff(a, b) {
+                let d = (b - a + 540) % 360 - 180; // -180..180
+                return d;
+            }
+
+            function step(timestamp) {
+                if(!isNavigating) return;
+                if(!startTime) startTime = timestamp;
+                
+                const progress = timestamp - startTime;
+                const percent = Math.min(progress / currentSpeed, 1);
+
+                if (index >= routeCoords.length - 1) return stopNavigation();
+
+                const start = routeCoords[index];
+                const end = routeCoords[index+1];
+                
+                const lat = lerp(start.lat, end.lat, percent);
+                const lng = lerp(start.lng, end.lng, percent);
+                const currPos = L.latLng(lat, lng);
+
+                // Look 10 m ahead along the route from the CURRENT position
+                const lookaheadPt = getLookaheadPoint(index, currPos, LOOKAHEAD_METERS); 
+                if(lookaheadPt) {
+                    const bearing = getBearing(currPos.lat, currPos.lng, lookaheadPt.lat, lookaheadPt.lng);
+                    
+                    if (userMarker) {
+                        userMarker.setLatLng(currPos);
+
+                        // Smooth CAMERA heading toward 10m-ahead bearing
+                        const diff = angularDiff(currentVisualHeading, bearing);
+                        currentVisualHeading = currentVisualHeading + diff * 0.15;
+                        const mapHeading = currentVisualHeading;
+
+                        // Map rotation (camera)
+                        document.getElementById('map').style.transform = `rotateX(60deg) rotateZ(${-mapHeading}deg) scale(2.0)`;
+                        
+                        // ARROW EXACTLY ALIGNED WITH 10M-AHEAD DIRECTION (no smoothing)
+                        const el = userMarker.getElement();
+                        if (el) {
+                            const inner = el.querySelector('.arrow-icon-inner');
+                            if(inner) inner.style.transform = `rotate(${bearing}deg)`;
+                        }
+                        
+                        const offsetCenter = shiftLatLng(currPos.lat, currPos.lng, 25, mapHeading);
+                        map.setView(offsetCenter, map.getZoom(), {animate: false});
+                    }
+                }
+
+                updateInstructions(index, currPos);
+                // UPDATED: Update ETA and Distance in Footer dynamically
+                updateTripDashboard(index, percent);
+                
+                // Adjust animation speed near turns (unchanged logic but fixed angle diff)
+                if(index + 3 < routeCoords.length) {
+                    const b1 = getBearing(routeCoords[index].lat, routeCoords[index].lng, routeCoords[index+1].lat, routeCoords[index+1].lng);
+                    const b2 = getBearing(routeCoords[index+2].lat, routeCoords[index+2].lng, routeCoords[index+3].lat, routeCoords[index+3].lng);
+                    const turnAngle = Math.abs(angularDiff(b1, b2));
+                    currentSpeed = turnAngle > 15 ? 1200 : 300; 
+                }
+
+                if(percent >= 1) {
+                    startTime = timestamp;
+                    index++;
+                }
+                animationFrameId = requestAnimationFrame(step);
+            }
+            animationFrameId = requestAnimationFrame(step);
+        }
+
+        // --- UPDATED: Dynamic Dashboard Updater ---
+        function updateTripDashboard(index, percent) {
+            if (routeDistanceIndex.length === 0) return;
+
+            // Calculate precise current distance along path
+            const distAtIndex = routeDistanceIndex[index];
+            const distNext = routeDistanceIndex[Math.min(index + 1, routeDistanceIndex.length - 1)];
+            const currentDist = distAtIndex + (distNext - distAtIndex) * percent;
+            
+            const totalDist = routeDistanceIndex[routeDistanceIndex.length - 1];
+            const remainingDist = Math.max(0, totalDist - currentDist);
+
+            // Calculate remaining time based on proportion of distance left
+            // (Simulation logic: assumes constant average speed relative to original estimate)
+            const remainingSeconds = (remainingDist / totalDist) * totalRouteSeconds;
+
+            // Update Text
+            const h = Math.floor(remainingSeconds / 3600);
+            const m = Math.ceil((remainingSeconds % 3600) / 60); // Round up usually safer for ETA
+            
+            let timeStr = m + " min";
+            if (h > 0) timeStr = h + " hr " + m + " min";
+            // Less than 1 min
+            if (remainingSeconds < 60) timeStr = "< 1 min";
+
+            document.getElementById('nav-footer-time').textContent = timeStr;
+            document.getElementById('nav-footer-dist').textContent = (remainingDist / 1000).toFixed(1) + " km";
+
+            // Update ETA Time
+            const etaDate = new Date();
+            etaDate.setSeconds(etaDate.getSeconds() + remainingSeconds);
+            document.getElementById('nav-footer-eta').textContent = etaDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+
+        // --- Navigation Sign SVGs (from your green box snippet) ---
+        function getNavSignSvg(rawStep, instr, text) {
+            const lowerText = (text || '').toLowerCase();
+
+            let osrmType = '';
+            let osrmModifier = '';
+
+            if (rawStep && rawStep.maneuver) {
+                osrmType = (rawStep.maneuver.type || '').toLowerCase();
+                osrmModifier = (rawStep.maneuver.modifier || '').toLowerCase();
+            }
+
+            let lrmType = (instr && instr.type ? String(instr.type).toLowerCase() : '');
+            let lrmModifier = (instr && instr.modifier ? String(instr.modifier).toLowerCase() : '');
+
+            function has(word) {
+                return lowerText.includes(word);
+            }
+
+            function pickKey() {
+                // Arrival / Destination
+                if (
+                    osrmType === 'arrive' ||
+                    lrmType === 'destination' ||
+                    lrmType === 'waypointreached' ||
+                    has('destination') ||
+                    has('arrive')
+                ) {
+                    return 'arrive';
+                }
+
+                // Roundabouts (treat enter / inside same)
+                if (osrmType === 'roundabout' || osrmType === 'rotary' || lrmType === 'roundabout' || lrmType === 'rotary') {
+                    return 'roundabout';
+                }
+
+                // Forks
+                if (osrmType === 'fork' || lrmType === 'fork') {
+                    if (osrmModifier.includes('right') || lrmModifier.includes('right') || has('right')) return 'fork-right';
+                    if (osrmModifier.includes('left') || lrmModifier.includes('left') || has('left')) return 'fork-left';
+                    // default
+                    return 'fork-right';
+                }
+
+                // Ramps
+                if (osrmType === 'on ramp' || osrmType === 'off ramp' || osrmType === 'ramp' || lrmType === 'ramp') {
+                    if (osrmModifier.includes('right') || lrmModifier.includes('right') || has('right')) return 'ramp-right';
+                    if (osrmModifier.includes('left') || lrmModifier.includes('left') || has('left')) return 'ramp-left';
+                    return 'ramp-right';
+                }
+
+                // Merge
+                if (osrmType === 'merge' || lrmType === 'merge' || has('merge')) {
+                    if (osrmModifier.includes('right') || lrmModifier.includes('right') || has('right')) return 'merge-right';
+                    if (osrmModifier.includes('left') || lrmModifier.includes('left') || has('left')) return 'merge-left';
+                    return 'merge';
+                }
+
+                // U-turns
+                if (osrmModifier === 'uturn' || lrmModifier === 'uturn' || has('u-turn') || has('uturn')) {
+                    if (has('right')) return 'uturn-right';
+                    // default assume left for right-hand traffic
+                    return 'uturn-left';
+                }
+
+                // Sharp / Slight / Normal turns
+                if (osrmModifier.includes('sharp right') || has('sharp right')) return 'sharp-right';
+                if (osrmModifier.includes('sharp left') || has('sharp left')) return 'sharp-left';
+
+                if (osrmModifier.includes('slight right') || has('slight right')) return 'slight-right';
+                if (osrmModifier.includes('slight left') || has('slight left')) return 'slight-left';
+
+                if (osrmModifier.includes('right') || lrmModifier.includes('right') || has('right')) return 'right';
+                if (osrmModifier.includes('left') || lrmModifier.includes('left') || has('left')) return 'left';
+
+                // Straight / continue
+                if (
+                    osrmModifier === 'straight' ||
+                    lrmModifier === 'straight' ||
+                    lrmType === 'straight' ||
+                    has('continue') ||
+                    has('head') ||
+                    has('go straight')
+                ) {
+                    return 'straight';
+                }
+
+                // Fallback
+                return 'straight';
+            }
+
+            const key = pickKey();
+            const svgMap = {
+                'right': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M30 80 V50 A20 20 0 0 1 50 30 H80"></path>
+                        <path d="M65 15 L80 30 L65 45"></path>
+                    </svg>
+                `,
+                'left': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M70 80 V50 A20 20 0 0 0 50 30 H20"></path>
+                        <path d="M35 15 L20 30 L35 45"></path>
+                    </svg>
+                `,
+                'slight-right': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M40 85 Q40 55 65 30 L70 25"></path>
+                        <path d="M50 25 L70 25 L70 45"></path>
+                    </svg>
+                `,
+                'slight-left': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M60 85 Q60 55 35 30 L30 25"></path>
+                        <path d="M50 25 L30 25 L30 45"></path>
+                    </svg>
+                `,
+                'sharp-right': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M25 80 V50 A20 20 0 0 1 45 30 H55 A20 20 0 0 1 75 50 V60"></path>
+                        <path d="M60 45 L75 60 L90 45"></path>
+                    </svg>
+                `,
+                'sharp-left': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M75 80 V50 A20 20 0 0 0 55 30 H45 A20 20 0 0 0 25 50 V60"></path>
+                        <path d="M10 45 L25 60 L40 45"></path>
+                    </svg>
+                `,
+                'uturn-right': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M30 80 V45 A20 20 0 0 1 70 45 V65"></path>
+                        <path d="M55 50 L70 65 L85 50"></path>
+                    </svg>
+                `,
+                'uturn-left': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M70 80 V45 A20 20 0 0 0 30 45 V65"></path>
+                        <path d="M15 50 L30 65 L45 50"></path>
+                    </svg>
+                `,
+                'straight': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M50 85 L50 15"></path>
+                        <path d="M35 30 L50 15 L65 30"></path>
+                    </svg>
+                `,
+                'merge': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M35 35 L50 20 L65 35"></path>
+                        <path d="M50 20 L50 55"></path>
+                        <path d="M50 55 L25 85"></path>
+                        <path d="M50 55 L75 85"></path>
+                    </svg>
+                `,
+                'merge-right': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M35 35 L50 20 L65 35"></path>
+                        <path d="M50 20 L50 85"></path>
+                        <path d="M50 55 L75 85"></path>
+                    </svg>
+                `,
+                'merge-left': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M35 35 L50 20 L65 35"></path>
+                        <path d="M50 20 L50 85"></path>
+                        <path d="M50 55 L25 85"></path>
+                    </svg>
+                `,
+                'ramp-right': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M35 85 L35 15" stroke-opacity="0.4"></path>
+                        <path d="M35 60 Q35 40 60 30 L75 25"></path>
+                        <path d="M60 15 L75 25 L65 40"></path>
+                    </svg>
+                `,
+                'ramp-left': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M65 85 L65 15" stroke-opacity="0.4"></path>
+                        <path d="M65 60 Q65 40 40 30 L25 25"></path>
+                        <path d="M35 40 L25 25 L40 15"></path>
+                    </svg>
+                `,
+                'fork-right': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M50 55 Q50 35 25 25" stroke-opacity="0.4"></path>
+                        <path d="M50 90 L50 55 Q50 35 75 25"></path>
+                        <path d="M60 20 L75 25 L70 40"></path>
+                    </svg>
+                `,
+                'fork-left': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M50 55 Q50 35 75 25" stroke-opacity="0.4"></path>
+                        <path d="M50 90 L50 55 Q50 35 25 25"></path>
+                        <path d="M30 40 L25 25 L40 20"></path>
+                    </svg>
+                `,
+                'roundabout': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M50 70 A 25 25 0 1 0 25 45 L 25 55"></path>
+                        <path d="M15 45 L 25 55 L 35 45"></path>
+                    </svg>
+                `,
+                'arrive': `
+                    <svg viewBox="0 0 100 100">
+                        <path d="M50 85 C 50 85 25 55 25 35 A 25 25 0 1 1 75 35 C 75 55 50 85 50 85 Z"></path>
+                        <circle cx="50" cy="35" r="10"></circle>
+                    </svg>
+                `
+            };
+
+            return svgMap[key] || svgMap['straight'];
+        }
+
+        // --- Instructions & Real OSM Metadata ---
+        function updateInstructions(idx, currPos) {
+            const instr = routeInstructions.find(i => i.index >= idx) || routeInstructions[routeInstructions.length - 1];
+            if(!instr) return;
+
+            // 1. Text & Distance
+            let text = instr.text;
+            if(text.includes('Head')) text = "Continue straight";
+            
+            // --- British English Localization ---
+            text = text.replace(/traffic circle/gi, "roundabout");
+            text = text.replace(/center/gi, "centre");
+
+            document.getElementById('nav-step').textContent = text;
+            
+            // --- Path-based Distance Calculation ---
+            let d = 0;
+            const destIndex = Math.min(instr.index, routeCoords.length - 1);
+            const nextIndex = Math.min(idx + 1, routeCoords.length - 1);
+
+            if (routeDistanceIndex.length > 0 && destIndex >= nextIndex) {
+                const segmentDist = routeDistanceIndex[destIndex] - routeDistanceIndex[nextIndex];
+                const partialDist = map.distance(currPos, routeCoords[nextIndex]);
+                d = segmentDist + partialDist;
+            } else {
+                d = map.distance(currPos, routeCoords[destIndex]);
+            }
+
+            document.getElementById('nav-dist').textContent = d > 1000 ? (d/1000).toFixed(1) + " km" : Math.round(d) + " m";
+
+            // 3. REAL OSM DATA Extraction (Lanes/Exit Info) + Sign rendering
+            let rawStep = null;
+
+            if(rawRouteData && rawRouteData.routes && rawRouteData.routes[0].legs) {
+                const leg = rawRouteData.routes[0].legs[0];
+                const instrIdx = routeInstructions.indexOf(instr);
+                
+                if (instrIdx !== -1 && leg.steps[instrIdx]) {
+                    rawStep = leg.steps[instrIdx];
+
+                    // Ref / Exit
+                    const shieldEl = document.getElementById('road-shield');
+                    const exitEl = document.getElementById('exit-badge');
+                    
+                    if(rawStep.ref) {
+                        shieldEl.textContent = rawStep.ref.replace(/;/g, " / ");
+                        shieldEl.classList.remove('hidden');
+                        document.getElementById('nav-road-info').classList.remove('hidden');
+                    } else {
+                        shieldEl.classList.add('hidden');
+                    }
+
+                    if(rawStep.exits) {
+                        document.getElementById('exit-text').textContent = rawStep.exits;
+                        exitEl.classList.remove('hidden');
+                        document.getElementById('nav-road-info').classList.remove('hidden');
+                    } else {
+                        exitEl.classList.add('hidden');
+                    }
+
+                    // Lanes
+                    let foundLanes = false;
+                    if(rawStep.intersections && rawStep.intersections.length > 0) {
+                        const intersection = rawStep.intersections[0];
+                        if(intersection.lanes && intersection.lanes.length > 0) {
+                            renderRealLanes(intersection.lanes);
+                            foundLanes = true;
+                        }
+                    }
+                    
+                    if (!foundLanes) {
+                        document.getElementById('nav-lanes').classList.add('hidden');
+                    }
+                } else {
+                    document.getElementById('nav-lanes').classList.add('hidden');
+                    document.getElementById('nav-road-info').classList.add('hidden');
+                }
+            } else {
+                document.getElementById('nav-lanes').classList.add('hidden');
+                document.getElementById('nav-road-info').classList.add('hidden');
+            }
+
+            // 4. Navigation Sign Icon (depends on maneuver)
+            const iconEl = document.getElementById('nav-icon');
+            iconEl.innerHTML = getNavSignSvg(rawStep, instr, text);
+        }
+
+        // Render REAL OSRM Lanes Only
+        function renderRealLanes(osrmLanes) {
+            const container = document.getElementById('nav-lanes');
+            container.innerHTML = '';
+            container.classList.remove('hidden');
+
+            osrmLanes.forEach(lane => {
+                const el = document.createElement('div');
+                const isActive = lane.valid;
+                // Map OSRM indication to icon
+                let icon = 'ph-arrow-up';
+                if(lane.indications) {
+                    if(lane.indications.includes('right')) icon = 'ph-arrow-bend-up-right';
+                    else if(lane.indications.includes('left')) icon = 'ph-arrow-bend-up-left';
+                    else if(lane.indications.includes('straight')) icon = 'ph-arrow-up';
+                    else if(lane.indications.includes('slight right')) icon = 'ph-arrow-up-right';
+                    else if(lane.indications.includes('slight left')) icon = 'ph-arrow-up-left';
+                    else if(lane.indications.includes('u-turn')) icon = 'ph-arrow-u-up-left';
+                }
+
+                el.className = `text-3xl ${isActive ? 'text-white' : 'text-white/40'}`;
+                el.innerHTML = `<i class="ph-bold ${icon}"></i>`;
+                container.appendChild(el);
+            });
+        }
+
+        function stopNavigation() {
+            isNavigating = false;
+            cancelAnimationFrame(animationFrameId);
+            if(speedLimitInterval) clearInterval(speedLimitInterval); // Stop polling
+            document.getElementById('map').style.transform = '';
+            
+            document.getElementById('explore-ui').classList.remove('-translate-y-full');
+            document.getElementById('nav-header').classList.add('-translate-y-[150%]');
+            document.getElementById('nav-footer').classList.add('translate-y-[150%]');
+            
+            // RESET CONTROLS (remove all translations)
+            const controls = document.getElementById('map-controls');
+            controls.classList.remove('-translate-y-[250px]');
+            controls.classList.remove('-translate-y-[200px]');
+            controls.classList.remove('translate-y-[200px]');
+
+            document.getElementById('trip-card').classList.remove('translate-y-[110%]');
+            document.getElementById('trip-card').classList.add('translate-y-0');
+            
+            // Move controls up slightly for trip card
+            controls.classList.add('-translate-y-[200px]');
+
+            // Clean up inner nav UI bits
+            document.getElementById('speed-limit').classList.add('hidden');
+            document.getElementById('nav-lanes').classList.add('hidden');
+            document.getElementById('nav-road-info').classList.add('hidden');
+
+            if(userMarker) {
+                const ll = userMarker.getLatLng();
+                map.removeLayer(userMarker);
+                userMarker = L.marker(ll, {icon: createIcon('user')}).addTo(map);
+            }
+            map.setZoom(16);
+        }
+
+        function getBearing(lat1, lng1, lat2, lng2) {
+            const y = Math.sin((lng2-lng1) * Math.PI/180) * Math.cos(lat2 * Math.PI/180);
+            const x = Math.cos(lat1 * Math.PI/180) * Math.sin(lat2 * Math.PI/180) - Math.sin(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.cos((lng2-lng1) * Math.PI/180);
+            return ((Math.atan2(y, x) * 180/Math.PI) + 360) % 360;
+        }
+
+        function clearMapState() {
+            if(isNavigating) stopNavigation();
+            
+            // Force Hide Nav Elements
+            document.getElementById('nav-header').classList.add('-translate-y-[150%]');
+            document.getElementById('nav-footer').classList.add('translate-y-[150%]');
+            document.getElementById('explore-ui').classList.remove('-translate-y-full');
+            
+            // RESET CONTROLS FULLY
+            const controls = document.getElementById('map-controls');
+            controls.classList.remove('-translate-y-[250px]');
+            controls.classList.remove('-translate-y-[200px]');
+            controls.classList.remove('translate-y-[200px]');
+
+            if(routingControl) { map.removeControl(routingControl); routingControl = null; }
+            if(destMarker) { map.removeLayer(destMarker); destMarker = null; destLocation = null; }
+            document.getElementById('trip-card').classList.add('translate-y-[110%]');
+            document.getElementById('trip-card').classList.remove('translate-y-0');
+            document.getElementById('search-input').value = '';
+            map.setZoom(15);
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.remove('opacity-0', 'translate-y-4');
+            setTimeout(() => t.classList.add('opacity-0', 'translate-y-4'), 3000);
+        }
+
+        async function searchLocation() {
+            const q = document.getElementById('search-input').value;
+            if(!q) return;
+            const res = document.getElementById('search-results');
+            res.innerHTML = '<div class="p-4 text-center text-gray-500 text-sm">Searching...</div>';
+            res.classList.remove('hidden');
+            try {
+                const data = await (await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`)).json();
+                res.innerHTML = '';
+                if(!data.length) return res.innerHTML = '<div class="p-4 text-center text-gray-500 text-sm">No results found</div>';
+                data.slice(0, 5).forEach(p => {
+                    const d = document.createElement('div');
+                    d.className = 'p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-100 flex items-center gap-3 transition';
+                    d.innerHTML = `
+                        <div class="bg-gray-100 p-2 rounded-full text-gray-500"><i class="ph-fill ph-map-pin"></i></div>
+                        <div class="min-w-0">
+                            <span class="font-medium text-gray-800 text-sm block truncate">${p.display_name.split(',')[0]}</span>
+                            <span class="text-xs text-gray-500 block truncate">${p.display_name}</span>
+                        </div>`;
+                    d.onclick = () => { 
+                        res.classList.add('hidden'); 
+                        setDestination(L.latLng(p.lat, p.lon), p.display_name); 
+                    };
+                    res.appendChild(d);
+                });
+            } catch(e) { console.error(e); res.classList.add('hidden'); }
+        }
+
+        function handleEnter(e) { if(e.key === 'Enter') searchLocation(); }
+
+        handleLocate(true);
+    </script>
+</body>
+</html>
