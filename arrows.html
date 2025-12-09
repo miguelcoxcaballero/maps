@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSM Navigation Instructions</title>
+    <style>
+        :root {
+            /* Matching the green from standard navigation signs and your image */
+            --nav-green: #408c50; 
+            --icon-white: #ffffff;
+        }
+
+        body {
+            background-color: var(--nav-green);
+            color: var(--icon-white);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            margin-bottom: 40px;
+            font-weight: 300;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-align: center;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 40px;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        .instruction-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            text-align: center;
+        }
+
+        .label {
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            opacity: 0.9;
+            min-height: 2.5em; /* aligns icons even if text wraps */
+            display: flex;
+            align-items: end;
+            justify-content: center;
+        }
+
+        /* SVG Styles */
+        svg {
+            width: 80px;
+            height: 80px;
+            fill: none;
+            stroke: var(--icon-white);
+            stroke-width: 8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>OSM Navigation Guidance</h1>
+
+    <div class="grid-container">
+        
+        <!-- Standard Turns -->
+        <div class="instruction-card">
+            <span class="label">Turn Right</span>
+            <svg viewBox="0 0 100 100">
+                <path d="M30 80 V50 A20 20 0 0 1 50 30 H80" />
+                <path d="M65 15 L80 30 L65 45" />
+            </svg>
+        </div>
+
+        <div class="instruction-card">
+            <span class="label">Turn Left</span>
+            <svg viewBox="0 0 100 100">
+                <path d="M70 80 V50 A20 20 0 0 0 50 30 H20" />
+                <path d="M35 15 L20 30 L35 45" />
+            </svg>
+        </div>
+
+        <div class="instruction-card">
+            <span class="label">Slight Right</span>
+            <svg viewBox="0 0 100 100">
+                <!-- Smooth curve starting from bottom (40,85) to (65,30) -->
+                <!-- Short straight diagonal extension to (70,25) for perfect arrow join -->
+                <path d="M40 85 Q40 55 65 30 L70 25" />
+                <!-- 90-degree corner arrow aligned to the 45-degree incoming line -->
+                <!-- Extended legs from 15px to 20px -->
+                <path d="M50 25 L70 25 L70 45" />
+            </svg>
+        </div>
+
+        <div class="instruction-card">
+            <span class="label">Slight Left</span>
+            <svg viewBox="0 0 100 100">
+                <!-- Smooth curve starting from bottom (60,85) to (35,30) -->
+                <!-- Short straight diagonal extension to (30,25) -->
+                <path d="M60 85 Q60 55 35 30 L30 25" />
+                <!-- 90-degree corner arrow aligned to the 45-degree incoming line -->
+                <!-- Extended legs from 15px to 20px -->
+                <path d="M50 25 L30 25 L30 45" />
+            </svg>
+        </div>
+
+        <div class="instruction-card">
+            <span class="label">Sharp Right</span>
+            <svg viewBox="0 0 100 100">
+                <path d="M25 80 V50 A20 20 0 0 1 45 30 H55 A20 20 0 0 1 75 50 V60" />
+                <path d="M60 45 L75 60 L90 45" />
+            </svg>
+        </div>
+
+        <div class="instruction-card">
+            <span class="label">Sharp Left</span>
+            <svg viewBox="0 0 100 100">
+                <path d="M75 80 V50 A20 20 0 0 0 55 30 H45 A20 20 0 0 0 25 50 V60" />
+                <path d="M10 45 L25 60 L40 45" />
+            </svg>
+        </div>
+
+        <div class="instruction-card">
+            <span class="label">U-Turn (Right)</span>
+            <svg viewBox="0 0 100 100">
+                <path d="M30 80 V45 A20 20 0 0 1 70 45 V65" />
+                <path d="M55 50 L70 65 L85 50" />
+            </svg>
+        </div>
+
+        <div class="instruction-card">
+            <span class="label">U-Turn (Left)</span>
+            <svg viewBox="0 0 100 100">
+                <path d="M70 80 V45 A20 20 0 0 0 30 45 V65" />
+                <path d="M15 50 L30 65 L45 50" />
+            </svg>
+        </div>
+
+        <div class="instruction-card">
+            <span class="label">Continue Straight</span>
+            <svg viewBox="0 0 100 100">
+                <path d="M50 85 L50 15" />
+                <path d="M35 30 L50 15 L65 30" />
+            </svg>
+        </div>
+
+        <!-- Merges & Ramps -->
+        <div class="instruction-card">
+            <span class="label">Merge</span>
+            <svg viewBox="0 0 100 100">
+                <!-- Arrow Head -->
+                <path d="M35 35 L50 20 L65 35" />
+                <!-- Vertical Shaft & Legs -->
+                <path d="M50 20 L50 55" />
+                <path d="M50 55 L25 85" />
+                <path d="M50 55 L75 85" />
+            </svg>
+        </div>
+
+        <div class="instruction-card">
+            <span class="label">Merge Right</span>
+            <svg viewBox="0 0 100 100">
+                <!-- Arrow Head -->
+                <path d="M35 35 L50 20 L65 35" />
+                <!-- Main Vertical Shaft -->
+                <path d="M50 20 L50 85" />
+                <!-- Merging Leg from Right -->
+                <path d="M50 55 L75 85" />
+            </svg>
+        </div>
+
+        <div class="instruction-card">
+            <span class="label">Merge Left</span>
+            <svg viewBox="0 0 100 100">
+                <!-- Arrow Head -->
+                <path d="M35 35 L50 20 L65 35" />
+                <!-- Main Vertical Shaft -->
+                <path d="M50 20 L50 85" />
+                <!-- Merging Leg from Left -->
+                <path d="M50 55 L25 85" />
+            </svg>
+        </div>
+
+        <div class="instruction-card">
+            <span class="label">Take the Ramp (Right)</span>
+            <svg viewBox="0 0 100 100">
+                <path d="M35 85 L35 15" stroke-opacity="0.4" />
+                <path d="M35 60 Q35 40 60 30 L75 25" />
+                <path d="M60 15 L75 25 L65 40" />
+            </svg>
+        </div>
+
+        <div class="instruction-card">
+            <span class="label">Take the Ramp (Left)</span>
+            <svg viewBox="0 0 100 100">
+                <path d="M65 85 L65 15" stroke-opacity="0.4" />
+                <path d="M65 60 Q65 40 40 30 L25 25" />
+                <path d="M35 40 L25 25 L40 15" />
+            </svg>
+        </div>
+
+        <!-- Forks -->
+        <div class="instruction-card">
+            <span class="label">Fork Right</span>
+            <svg viewBox="0 0 100 100">
+                <!-- Inactive Left Branch (Faded) -->
+                <path d="M50 55 Q50 35 25 25" stroke-opacity="0.4" />
+                
+                <!-- Active Right Branch (Solid) - Continuous Path -->
+                <path d="M50 90 L50 55 Q50 35 75 25" />
+                
+                <!-- Arrow Head -->
+                <path d="M60 20 L75 25 L70 40" />
+            </svg>
+        </div>
+
+        <div class="instruction-card">
+            <span class="label">Fork Left</span>
+            <svg viewBox="0 0 100 100">
+                <!-- Inactive Right Branch (Faded) -->
+                <path d="M50 55 Q50 35 75 25" stroke-opacity="0.4" />
+                
+                <!-- Active Left Branch (Solid) - Continuous Path -->
+                <path d="M50 90 L50 55 Q50 35 25 25" />
+                
+                <!-- Arrow Head -->
+                <path d="M30 40 L25 25 L40 20" />
+            </svg>
+        </div>
+
+        <!-- Roundabouts -->
+        <div class="instruction-card">
+            <span class="label">Roundabout</span>
+            <svg viewBox="0 0 100 100">
+                <!-- Curve only, starting from the bottom of the circle part -->
+                <!-- Added 'L 25 55' to extend slightly straight down -->
+                <path d="M50 70 A 25 25 0 1 0 25 45 L 25 55" />
+                
+                <!-- Arrow Head centered on the new endpoint (25, 55) -->
+                <path d="M15 45 L 25 55 L 35 45" />
+            </svg>
+        </div>
+
+        <div class="instruction-card">
+            <span class="label">Enter Roundabout</span>
+            <svg viewBox="0 0 100 100">
+                <!-- Same fix: Curve plus short straight extension -->
+                <path d="M50 70 A 25 25 0 1 0 25 45 L 25 55" />
+                
+                <!-- Arrow Head centered -->
+                <path d="M15 45 L 25 55 L 35 45" />
+            </svg>
+        </div>
+
+        <!-- Arrival -->
+        <div class="instruction-card">
+            <span class="label">Arrive / Destination</span>
+            <svg viewBox="0 0 100 100">
+                <!-- Pinpoint shape -->
+                <path d="M50 85 C 50 85 25 55 25 35 A 25 25 0 1 1 75 35 C 75 55 50 85 50 85 Z" />
+                <!-- Central hole -->
+                <circle cx="50" cy="35" r="10" />
+            </svg>
+        </div>
+
+    </div>
+</body>
+</html>
