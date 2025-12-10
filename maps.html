@@ -481,51 +481,77 @@
             const lng = pos.coords.longitude;
             const newPos = L.latLng(lat, lng);
             
-            // Update Marker
-            if (userMarker) {
-                userMarker.setLatLng(newPos);
-            }
+            // 1. Get Snapped Point & Info
+            const snapInfo = getClosestPointOnRoute(newPos);
+            const snappedPos = snapInfo.point;
+            const distToRoute = snapInfo.dist;
+            const segIndex = snapInfo.index;
 
-            // --- FIXED: Find lookahead point to set BEARING relative to route ---
-            // This prevents the arrow from spinning based on phone compass
-            const closestIdx = findClosestRouteIndex(newPos);
-            const lookaheadPt = getLookaheadPoint(closestIdx, newPos, LOOKAHEAD_METERS);
+            // 2. Decide: Stick or Drift
+            let displayPos;
             
-            if (lookaheadPt) {
-                // Calculate bearing from current GPS pos to lookahead point on route
-                const bearing = getBearing(newPos.lat, newPos.lng, lookaheadPt.lat, lookaheadPt.lng);
-                currentVisualHeading = bearing; 
-                updateCamera(newPos, currentVisualHeading);
+            if (distToRoute > REROUTE_THRESHOLD_METERS) {
+                console.log("Off route detected: " + distToRoute + "m. Recalculating...");
+                showToast("Recalculating route...");
+                userLocation = newPos;
+                calculateRoute(); // Will restart nav
+                return; // Stop here until new route
             } else {
-                // Fallback (e.g. end of route)
-                updateCamera(newPos, currentVisualHeading);
+                // Stick mode
+                displayPos = snappedPos;
+                navIndex = segIndex; // Sync simulation state to this point
             }
 
-            // Calculate deviation
-            if (routeCoords.length > 0) {
-                const closestPt = routeCoords[closestIdx];
-                const distToRoute = map.distance(newPos, closestPt);
+            // 3. Update Marker
+            if (userMarker) {
+                userMarker.setLatLng(displayPos);
+            }
+
+            // 4. Orientation & Camera (Look ahead from SNAPPED position)
+            const lookaheadPt = getLookaheadPoint(segIndex, displayPos, LOOKAHEAD_METERS);
+            if (lookaheadPt) {
+                const bearing = getBearing(displayPos.lat, displayPos.lng, lookaheadPt.lat, lookaheadPt.lng);
+                currentVisualHeading = bearing; 
+                updateCamera(displayPos, currentVisualHeading);
+            } else {
+                updateCamera(displayPos, currentVisualHeading);
+            }
+
+            // 5. Update UI
+            updateInstructions(segIndex, displayPos);
+            updateTripDashboard(segIndex, 0);
+        }
+
+        // --- NEW Helper: Find exact closest point on the route polyline ---
+        function getClosestPointOnRoute(latlng) {
+            let minDist = Infinity;
+            let bestPoint = latlng;
+            let bestIndex = 0;
+
+            for(let i=0; i<routeCoords.length-1; i++) {
+                // Convert lat/lng to container points for 2D projection math
+                // This is robust for small distances (<1km) which is our case
+                const p = map.latLngToLayerPoint(latlng);
+                const p1 = map.latLngToLayerPoint(routeCoords[i]);
+                const p2 = map.latLngToLayerPoint(routeCoords[i+1]);
                 
-                if (distToRoute > REROUTE_THRESHOLD_METERS) {
-                    console.log("Off route detected: " + distToRoute + "m. Recalculating...");
-                    showToast("Recalculating route...");
-                    userLocation = newPos;
-                    calculateRoute(); // Will restart nav
-                    return;
+                // Leaflet util to project point onto segment
+                const closestP = L.LineUtil.closestPointOnSegment(p, p1, p2);
+                const closestLL = map.layerPointToLatLng(closestP);
+                const d = map.distance(latlng, closestLL);
+                
+                if(d < minDist) {
+                    minDist = d;
+                    bestPoint = closestLL;
+                    bestIndex = i;
                 }
             }
-
-            // Update UI instructions based on closest point
-            updateInstructions(closestIdx, newPos);
-            // approximate percent for dashboard (simplified)
-            const percent = 0; // In GPS mode, interpolation percent is 0 relative to discrete points
-            updateTripDashboard(closestIdx, percent);
+            return { point: bestPoint, dist: minDist, index: bestIndex };
         }
 
         function findClosestRouteIndex(latlng) {
             let minD = Infinity;
             let idx = 0;
-            // Optimization: Only search near current estimated index if possible, but full search is safer for rerouting logic
             for (let i = 0; i < routeCoords.length; i++) {
                 const d = map.distance(latlng, routeCoords[i]);
                 if (d < minD) {
