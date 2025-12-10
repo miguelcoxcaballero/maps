@@ -145,27 +145,27 @@
 
         /* Animated Lanes Drawer */
         #nav-lanes {
-            background-color: #0B5C32; /* Deep Dark Green */
+            background-color: #064E2B; /* Even Darker Green for contrast */
             color: white;
             position: absolute;
-            top: 100%;
-            left: 1.5rem; 
-            right: 1.5rem;
-            padding: 1.5rem 1rem 1rem 1rem; /* Top padding accounts for tuck */
+            top: 100%; /* Starts at bottom of header */
+            left: 2rem; 
+            right: 2rem;
+            padding: 2rem 1rem 1rem 1rem; /* Extra top padding to hide behind header curve */
             border-radius: 0 0 1.5rem 1.5rem;
-            z-index: 10;
-            transform: translateY(-100%);
+            z-index: 10; /* Behind header content (20) */
+            transform: translateY(-100%); /* Tucked away */
             opacity: 0;
-            transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s;
+            transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
             display: flex;
             justify-content: center;
-            gap: 2rem;
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2);
-            pointer-events: none;
+            gap: 1.5rem;
+            box-shadow: 0 10px 20px -5px rgba(0,0,0,0.3);
+            pointer-events: none; /* Initially none */
         }
 
         #nav-lanes.show-lanes {
-            transform: translateY(-15px); /* Hangs out below header with slight overlap */
+            transform: translateY(-20px); /* Slide out just enough to show */
             opacity: 1;
         }
 
@@ -174,22 +174,23 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transform: scaleY(1.4); /* Vertical elongation */
-            font-size: 2.5rem;
+            transform: scaleY(2.0); /* Extremely elongated as requested */
+            font-size: 3rem;
             line-height: 1;
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
         }
-        .lane-dimmed { opacity: 0.3; }
+        .lane-dimmed { opacity: 0.25; }
 
         /* Navigation Sign SVG styling INSIDE the green header box */
         #nav-icon svg {
-            width: 80px;
-            height: 80px;
+            width: 100%;
+            height: 100%;
             fill: none;
             stroke: var(--nav-sign-icon);
             stroke-width: 8;
             stroke-linecap: round;
             stroke-linejoin: round;
+            filter: drop-shadow(0 2px 3px rgba(0,0,0,0.2));
         }
     </style>
 </head>
@@ -239,12 +240,12 @@
             <div class="flex items-start gap-5 relative z-10">
                 <div class="mt-1 flex flex-col items-center justify-start shrink-0">
                     <!-- GREEN BOX SIGN -->
-                    <div id="nav-icon" class="w-20 h-20 flex items-center justify-center"></div>
-                    <!-- ROUNDABOUT EXIT LABEL -->
-                    <div id="roundabout-exit-label" class="mt-3 bg-white text-black text-2xl font-black px-4 py-1 rounded-3xl shadow-sm hidden border-2 border-white"></div>
+                    <div id="nav-icon" class="w-24 h-24 flex items-center justify-center"></div>
+                    <!-- ROUNDABOUT EXIT LABEL (Pill Shape) -->
+                    <div id="roundabout-exit-label" class="mt-3 bg-white text-black text-3xl font-black px-5 py-1 rounded-full shadow-lg hidden border-4 border-white text-center min-w-[3rem]"></div>
                 </div>
-                <div class="flex-1 min-w-0 pt-1">
-                    <div id="nav-dist" class="text-5xl font-bold mb-1 tracking-tight">0 m</div>
+                <div class="flex-1 min-w-0 pt-2">
+                    <div id="nav-dist" class="text-6xl font-bold mb-2 tracking-tight">0 m</div>
                     <div id="nav-step" class="text-2xl font-medium leading-tight opacity-95">Starting navigation...</div>
                 </div>
             </div>
