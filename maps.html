@@ -486,20 +486,21 @@
                 userMarker.setLatLng(newPos);
             }
 
-            // Heading/Bearing handling
-            // If GPS provides heading, use it. Otherwise calculate from movement?
-            // Leaflet Rotate or simple bearing update if moving fast enough
-            if (pos.coords.heading !== null && !isNaN(pos.coords.heading)) {
-                currentVisualHeading = pos.coords.heading;
+            // --- FIXED: Find lookahead point to set BEARING relative to route ---
+            // This prevents the arrow from spinning based on phone compass
+            const closestIdx = findClosestRouteIndex(newPos);
+            const lookaheadPt = getLookaheadPoint(closestIdx, newPos, LOOKAHEAD_METERS);
+            
+            if (lookaheadPt) {
+                // Calculate bearing from current GPS pos to lookahead point on route
+                const bearing = getBearing(newPos.lat, newPos.lng, lookaheadPt.lat, lookaheadPt.lng);
+                currentVisualHeading = bearing; 
                 updateCamera(newPos, currentVisualHeading);
             } else {
-                // Update camera without rotation if no heading
-                map.setView(newPos, map.getZoom(), {animate: true});
+                // Fallback (e.g. end of route)
+                updateCamera(newPos, currentVisualHeading);
             }
 
-            // Find closest point on route to determine progress & rerouting
-            const closestIdx = findClosestRouteIndex(newPos);
-            
             // Calculate deviation
             if (routeCoords.length > 0) {
                 const closestPt = routeCoords[closestIdx];
@@ -559,7 +560,9 @@
                     addWaypoints: false 
                 },
                 createMarker: () => null,
-                addWaypoints: false, draggableWaypoints: false, fitSelectedRoutes: true,
+                addWaypoints: false, draggableWaypoints: false, 
+                // FIXED: Don't auto-fit bounds if we are already navigating (prevents zoom out on reroute)
+                fitSelectedRoutes: !isNavigating,
                 show: false 
             }).on('routesfound', e => {
                 const route = e.routes[0];
@@ -654,7 +657,9 @@
             
             // Offset center to put arrow near bottom
             const offsetCenter = shiftLatLng(pos.lat, pos.lng, 25, bearing);
-            map.setView(offsetCenter, 18, {animate: false}); // animate false for smooth stream
+            
+            // FIXED: Ensure strict zoom level 18 during nav
+            map.setView(offsetCenter, 18, {animate: false}); 
         }
 
         function shiftLatLng(lat, lng, meters, bearing) {
