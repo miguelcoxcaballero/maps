@@ -140,50 +140,44 @@
 
         /* Header Layout Updates for Animated Lanes */
         #nav-header-content {
-            background-color: #0F9D58;
-            color: white;
-            padding: 2.5rem;
-            border-radius: 0 0 50px 50px;
-            position: relative;
-            z-index: 20;
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
-        }
-        @media (min-width: 768px) {
-            #nav-header-content { border-radius: 1.5rem; }
+            /* Now handled in HTML with Tailwind, but keeping basic defaults just in case */
         }
 
         /* Animated Lanes Drawer */
         #nav-lanes {
-            background-color: #0A6F3C; /* Darker Green */
+            background-color: #0B5C32; /* Deep Dark Green */
             color: white;
             position: absolute;
             top: 100%;
-            left: 20px; 
-            right: 20px;
-            padding: 12px 20px;
-            border-radius: 0 0 20px 20px;
+            left: 1.5rem; 
+            right: 1.5rem;
+            padding: 1.5rem 1rem 1rem 1rem; /* Top padding accounts for tuck */
+            border-radius: 0 0 1.5rem 1.5rem;
             z-index: 10;
             transform: translateY(-100%);
             opacity: 0;
-            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
+            transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s;
             display: flex;
             justify-content: center;
-            gap: 1.5rem;
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+            gap: 2rem;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2);
             pointer-events: none;
         }
 
         #nav-lanes.show-lanes {
-            transform: translateY(-20px); /* Hangs out below header */
+            transform: translateY(-15px); /* Hangs out below header with slight overlap */
             opacity: 1;
         }
 
         /* Elongated Lane Arrows */
         .lane-icon {
-            display: inline-block;
-            transform: scaleY(1.6) scaleX(1.1);
-            font-size: 2.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transform: scaleY(1.4); /* Vertical elongation */
+            font-size: 2.5rem;
             line-height: 1;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
         }
         .lane-dimmed { opacity: 0.3; }
 
@@ -232,7 +226,8 @@
     <div id="nav-header" class="map-ui absolute top-0 left-0 right-0 transform -translate-y-[150%] transition-transform duration-300 z-50 md:max-w-md md:left-6 md:top-6 md:right-auto pointer-events-none">
         
         <!-- Main Green Content Card -->
-        <div id="nav-header-content" class="pointer-events-auto">
+        <div id="nav-header-content" class="bg-[#0F9D58] text-white p-6 md:p-8 rounded-b-[40px] md:rounded-3xl shadow-[0_10px_20px_-5px_rgba(0,0,0,0.2)] relative z-20 pointer-events-auto">
+            
             <!-- Road Info Badge Row -->
             <div id="nav-road-info" class="flex items-center gap-3 mb-4 hidden">
                 <div id="road-shield" class="road-shield hidden"></div>
@@ -241,16 +236,16 @@
                 </div>
             </div>
 
-            <div class="flex items-start gap-6 relative z-10">
-                <div class="mt-1 flex flex-col items-center justify-start">
+            <div class="flex items-start gap-5 relative z-10">
+                <div class="mt-1 flex flex-col items-center justify-start shrink-0">
                     <!-- GREEN BOX SIGN -->
                     <div id="nav-icon" class="w-20 h-20 flex items-center justify-center"></div>
                     <!-- ROUNDABOUT EXIT LABEL -->
-                    <div id="roundabout-exit-label" class="mt-1 text-white text-4xl font-black leading-none tracking-tight hidden"></div>
+                    <div id="roundabout-exit-label" class="mt-3 bg-white text-black text-2xl font-black px-4 py-1 rounded-3xl shadow-sm hidden border-2 border-white"></div>
                 </div>
-                <div class="flex-1 min-w-0">
-                    <div id="nav-dist" class="text-5xl font-bold mb-2">0 m</div>
-                    <div id="nav-step" class="text-2xl font-medium leading-tight">Starting navigation...</div>
+                <div class="flex-1 min-w-0 pt-1">
+                    <div id="nav-dist" class="text-5xl font-bold mb-1 tracking-tight">0 m</div>
+                    <div id="nav-step" class="text-2xl font-medium leading-tight opacity-95">Starting navigation...</div>
                 </div>
             </div>
         </div>
@@ -957,7 +952,7 @@
         function renderRealLanes(osrmLanes) {
             const container = document.getElementById('nav-lanes');
             container.innerHTML = '';
-            container.classList.remove('hidden');
+            container.classList.add('show-lanes'); // Animate in
 
             osrmLanes.forEach(lane => {
                 const el = document.createElement('div');
@@ -980,7 +975,7 @@
                     else if(lane.indications.includes('u-turn')) icon = 'ph-arrow-u-up-left';
                 }
 
-                el.className = `text-3xl ${isActive ? 'text-white' : 'text-white/40'}`;
+                el.className = `lane-icon ${isActive ? 'text-white' : 'text-white/40'}`;
                 el.innerHTML = `<i class="ph-bold ${icon}"></i>`;
                 container.appendChild(el);
             });
@@ -1007,7 +1002,7 @@
             controls.classList.add('-translate-y-[200px]');
 
             document.getElementById('speed-limit').classList.add('hidden');
-            document.getElementById('nav-lanes').classList.add('hidden');
+            document.getElementById('nav-lanes').classList.remove('show-lanes');
             document.getElementById('nav-road-info').classList.add('hidden');
             document.getElementById('roundabout-exit-label').classList.add('hidden');
             document.getElementById('roundabout-exit-label').textContent = '';
