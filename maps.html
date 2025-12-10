@@ -36,30 +36,33 @@
             position: absolute;
             top: 0;
             left: 0;
-            z-index: 0; /* Lowered base z-index */
-            perspective: 1200px;
+            z-index: 0; 
+            perspective: 1200px; /* Strong perspective for 3D effect */
             overflow: hidden;
         }
 
-        /* Map Size */
+        /* Map Size & Transform Origin */
         #map { 
+            /* Large size to cover rotation edges */
             height: 400%; 
             width: 400%; 
             position: absolute;
+            /* Perfectly centered relative to viewport */
             top: -150%;
             left: -150%;
             background: #e5e7eb;
+            /* Critical for rotation alignment */
             transform-origin: center center;
             will-change: transform;
-            /* Fix rendering clipping */
+            /* Preserves 3D context for smoother rendering */
             transform-style: preserve-3d;
             backface-visibility: hidden; 
         }
         
-        /* UI Layer - Increased Z-Index to prevent 3D clipping */
+        /* UI Layer - High Z-Index to stay on top */
         .map-ui { 
-            z-index: 2000; 
-            transform: translateZ(0); /* Force GPU layer */
+            z-index: 3000; 
+            transform: translateZ(0);
         }
 
         /* Hide Leaflet Controls */
@@ -67,7 +70,7 @@
         .leaflet-routing-container { display: none !important; }
 
         /* Custom Markers */
-        .leaflet-marker-icon { transition: transform 0.2s linear; }
+        .leaflet-marker-icon { transition: transform 0.1s linear; }
         .leaflet-marker-icon.nav-arrow-icon { transition: none !important; }
         .arrow-icon-inner { transform-origin: center; will-change: transform; }
 
@@ -90,7 +93,7 @@
             font-size: 24px; 
             color: #222;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            z-index: 2100; /* Ensure on top of footer */
+            z-index: 3100;
         }
         
         @media (min-width: 768px) {
@@ -182,19 +185,18 @@
     </div>
 
     <!-- ========================================== -->
-    <!-- NAV HEADER (Optimized for Mobile)          -->
+    <!-- NAV HEADER                                 -->
     <!-- ========================================== -->
     <div id="nav-header" class="map-ui absolute top-0 left-0 right-0 p-4 md:p-6 transform -translate-y-[150%] transition-transform duration-500 pointer-events-none z-40 md:max-w-md md:left-6 md:right-auto">
         
         <!-- Main Green Card -->
         <div class="bg-[#064e3b] text-white rounded-2xl shadow-floating overflow-hidden relative z-20 pointer-events-auto flex flex-col">
             
-            <!-- Increased padding and gap slightly -->
             <div class="flex items-start p-4 md:p-6 gap-4">
                 
                 <!-- Turn Icon Container -->
                 <div class="flex flex-col items-center shrink-0 -mt-1">
-                    <!-- Icon size kept reasonably large -->
+                    <!-- Icon size -->
                     <div id="nav-icon" class="w-16 h-16 md:w-20 md:h-20 flex items-center justify-center"></div>
                     <!-- Roundabout Exit Label -->
                     <div id="roundabout-exit-label" class="mt-1 md:mt-2 bg-white text-black text-lg md:text-xl font-black px-3 py-0.5 rounded shadow-lg hidden text-center min-w-[2.5rem]"></div>
@@ -292,7 +294,6 @@
     <!-- ========================================== -->
     <!-- BOTTOM BAR (NAV ACTIVE)                    -->
     <!-- ========================================== -->
-    <!-- Updated classes for rounding: rounded-t-3xl md:rounded-3xl -->
     <div id="nav-footer" class="map-ui absolute bottom-0 left-0 right-0 bg-white p-4 md:p-10 rounded-t-3xl md:rounded-3xl shadow-[0_-5px_15px_rgba(0,0,0,0.1)] transform translate-y-[150%] transition-transform duration-300 flex items-center justify-between z-[2000] md:max-w-md md:left-6 md:bottom-6 md:right-auto md:shadow-google">
         
         <!-- Speed Limit Sign -->
@@ -478,7 +479,6 @@
 
             const lat = pos.coords.latitude;
             const lng = pos.coords.longitude;
-            const accuracy = pos.coords.accuracy;
             const newPos = L.latLng(lat, lng);
             
             // Update Marker
@@ -561,7 +561,7 @@
                 },
                 createMarker: () => null,
                 addWaypoints: false, draggableWaypoints: false, 
-                // FIXED: Don't auto-fit bounds if we are already navigating (prevents zoom out on reroute)
+                // Don't auto-fit bounds if we are already navigating
                 fitSelectedRoutes: !isNavigating,
                 show: false 
             }).on('routesfound', e => {
@@ -580,7 +580,6 @@
                 
                 // If we are already navigating (e.g. reroute), don't show preview, just keep going
                 if (isNavigating) {
-                    // Update state variables for the new route
                     navIndex = 0; // Reset sim index
                     return; 
                 }
@@ -631,7 +630,7 @@
 
             const startLatLng = L.latLng(startPos.lat, startPos.lng);
             
-            // Initial Camera Setup
+            // --- FIXED: Visuals - Reverted to Scale 2x & Zoom 18 ---
             map.setZoom(18, {animate: true});
             updateCamera(startLatLng, 0);
 
@@ -646,19 +645,20 @@
         }
 
         function updateCamera(pos, bearing) {
+            // Re-apply scale(2.0) for thicker roads
             document.getElementById('map').style.transform = `rotateX(60deg) rotateZ(${-bearing}deg) scale(2.0)`;
             
-            // Rotate Arrow Icon
             const el = userMarker ? userMarker.getElement() : null;
             if (el) {
                 const inner = el.querySelector('.arrow-icon-inner');
                 if(inner) inner.style.transform = `rotate(${bearing}deg)`;
             }
             
-            // Offset center to put arrow near bottom
-            const offsetCenter = shiftLatLng(pos.lat, pos.lng, 25, bearing);
+            // Adjust Offset: Scale 2.0 changes visual center logic
+            // To keep car at bottom ~25%, we calculate offset based on 2x scaled pixels
+            const offsetCenter = shiftLatLng(pos.lat, pos.lng, 35, bearing);
             
-            // FIXED: Ensure strict zoom level 18 during nav
+            // Force strict zoom 18
             map.setView(offsetCenter, 18, {animate: false}); 
         }
 
@@ -685,16 +685,28 @@
             }
 
             function step(timestamp) {
+                // FIXED: Safety check + Stop condition
                 if(!isNavigating || !isSimulationEnabled) return;
                 
                 if(!startTime) startTime = timestamp;
                 const progress = timestamp - startTime;
+                
+                // Ensure percent is safely clamped
                 const percent = Math.min(progress / currentSpeed, 1);
 
-                if (navIndex >= routeCoords.length - 1) return stopNavigation();
+                if (navIndex >= routeCoords.length - 1) {
+                    stopNavigation();
+                    return;
+                }
 
                 const start = routeCoords[navIndex];
                 const end = routeCoords[navIndex+1];
+                
+                // Fallback if bad data
+                if(!start || !end) {
+                    stopNavigation();
+                    return;
+                }
                 
                 const lat = lerp(start.lat, end.lat, percent);
                 const lng = lerp(start.lng, end.lng, percent);
@@ -714,7 +726,7 @@
                 updateInstructions(navIndex, currPos);
                 updateTripDashboard(navIndex, percent);
                 
-                // Simple turn prediction speed adjustment
+                // Turn prediction
                 if(navIndex + 3 < routeCoords.length) {
                     const b1 = getBearing(routeCoords[navIndex].lat, routeCoords[navIndex].lng, routeCoords[navIndex+1].lat, routeCoords[navIndex+1].lng);
                     const b2 = getBearing(routeCoords[navIndex+2].lat, routeCoords[navIndex+2].lng, routeCoords[navIndex+3].lat, routeCoords[navIndex+3].lng);
@@ -723,15 +735,17 @@
                 }
 
                 if(percent >= 1) {
-                    startTime = timestamp;
+                    // Reset startTime ONLY when moving to next segment
+                    startTime = null; 
                     navIndex++;
                 }
+                
                 animationFrameId = requestAnimationFrame(step);
             }
             animationFrameId = requestAnimationFrame(step);
         }
 
-        // ... [Rest of getLookaheadPoint, updateInstructions, etc. is same as before, simplified below] ...
+        // ... [Rest of getLookaheadPoint, updateInstructions, etc.] ...
 
         function getLookaheadPoint(currentIndex, currentPosLatLng, lookaheadMeters) {
             let distAcc = 0;
@@ -782,7 +796,7 @@
             if(text.includes('Head')) text = "Continue";
             text = text.replace(/traffic circle/gi, "roundabout").replace(/center/gi, "centre");
 
-            document.getElementById('nav-step').textContent = "Starting..."; // Default
+            document.getElementById('nav-step').textContent = "Starting..."; 
             
             const stepEl = document.getElementById('nav-step');
             const streetEl = document.getElementById('nav-street-name');
@@ -851,8 +865,16 @@
              }
         }
 
-        // --- Helper functions from previous logic preserved (renderRealLanes, getNavSignSvg, etc) ---
-        // ... (SVG logic same as before, condensed for file length) ...
+        // --- Helper: Roundabout Logic ---
+        function getOrdinalSuffix(n) {
+            n = parseInt(n, 10);
+            if (isNaN(n)) return '';
+            const s = ["th", "st", "nd", "rd"];
+            const v = n % 100;
+            const suffix = s[(v - 20) % 10] || s[v] || s[0];
+            return `${n}${suffix}`;
+        }
+
         function renderRealLanes(osrmLanes) {
             const container = document.getElementById('nav-lanes');
             container.innerHTML = '';
