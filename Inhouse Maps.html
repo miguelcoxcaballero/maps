@@ -1,0 +1,2171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Maps Navigation</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Roboto -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        :root {
+            --bg-base: #eef2f7;
+            --surface: #ffffff;
+            --text: #11162E;
+            --text-muted: #6B7280;
+            --primary: #2563EB;
+            --primary-light: #3B82F6;
+            --primary-deep: #1F2D6E;
+            --accent: #FF7A1A;
+            --danger: #FF3D7F;
+            --danger-deep: #E11D48;
+            --success: #10B981;
+            --success-deep: #047857;
+            --waze-cyan: #33CCFF;
+            --shadow-sm: 0 2px 8px rgba(20,30,60,0.08);
+            --shadow-md: 0 8px 24px rgba(20,30,60,0.14);
+            --shadow-lg: 0 16px 40px rgba(20,30,60,0.20);
+            --radius-pill: 999px;
+            --radius-card: 22px;
+            --radius-lg: 28px;
+        }
+
+        body, html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: var(--bg-base);
+            color: var(--text);
+            font-family: 'Roboto', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Map & 3D Wrapper */
+        #map-wrapper {
+            height: 100%;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 0;
+            perspective: 1200px;
+            overflow: hidden;
+        }
+
+        #map {
+            height: 400%;
+            width: 400%;
+            position: absolute;
+            top: -150%;
+            left: -150%;
+            background: #e5e7eb;
+            transform-origin: center center;
+            will-change: transform;
+            /* `flat` (the default) keeps the tile pane and the SVG/marker
+               panes coplanar under the parent perspective. preserve-3d
+               caused sub-pixel Z offsets that visibly displaced the route
+               line from the tiles when the camera rotated. */
+            transform-style: flat;
+        }
+
+        .map-ui {
+            z-index: 3000;
+            transform: translateZ(0);
+        }
+
+        .leaflet-control-zoom, .leaflet-control-attribution { display: none; }
+        .leaflet-routing-container { display: none !important; }
+        .leaflet-marker-icon { transition: transform 0.1s linear; }
+        .leaflet-marker-icon.nav-arrow-icon { transition: none !important; }
+        .arrow-icon-inner { transform-origin: center; will-change: transform; }
+
+        .shadow-google { box-shadow: var(--shadow-sm); }
+        .shadow-floating { box-shadow: var(--shadow-lg); }
+
+        /* User location pulse */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.33); opacity: 0.8; }
+            80%, 100% { opacity: 0; transform: scale(1.5); }
+        }
+        .user-pulse::before {
+            content: '';
+            position: absolute;
+            height: 40px; width: 40px;
+            left: -12px; top: -12px;
+            border-radius: 50%;
+            background-color: rgba(51, 204, 255, 0.45);
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        /* ---------- Top search pill ---------- */
+        .search-pill {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(255,255,255,0.94);
+            backdrop-filter: blur(14px) saturate(140%);
+            -webkit-backdrop-filter: blur(14px) saturate(140%);
+            border-radius: var(--radius-pill);
+            padding: 6px 8px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid rgba(255,255,255,0.5);
+            height: 56px;
+        }
+        .search-pill input {
+            flex: 1;
+            border: 0;
+            background: transparent;
+            outline: 0;
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text);
+            padding: 0 6px;
+            min-width: 0;
+        }
+        .search-pill input::placeholder { color: var(--text-muted); font-weight: 400; }
+        .search-action {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 0;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+        }
+        .search-action:hover { background: rgba(0,0,0,0.06); color: var(--text); }
+        .search-results-card {
+            position: absolute;
+            top: 64px;
+            left: 0; right: 0;
+            background: var(--surface);
+            border-radius: 22px;
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            max-height: 60vh;
+            overflow-y: auto;
+            z-index: 50;
+        }
+
+        /* ---------- Nav header card ---------- */
+        .nav-card {
+            background: linear-gradient(135deg, #1F2D6E 0%, #2C3573 60%, #1A4FB0 100%);
+            color: white;
+            border-radius: var(--radius-card);
+            box-shadow: var(--shadow-lg);
+            padding: 16px 18px;
+            pointer-events: auto;
+            overflow: hidden;
+            position: relative;
+            z-index: 20;
+        }
+        .nav-card::before {
+            content: '';
+            position: absolute;
+            top: -40%;
+            right: -20%;
+            width: 280px; height: 280px;
+            background: radial-gradient(circle, rgba(51,204,255,0.18) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .nav-card-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            position: relative;
+        }
+        .nav-icon-chip {
+            width: 76px; height: 76px;
+            border-radius: 18px;
+            background: rgba(255,255,255,0.10);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            position: relative;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+        @media (min-width: 768px) {
+            .nav-icon-chip { width: 92px; height: 92px; border-radius: 22px; }
+        }
+        .nav-icon-svg-wrap { width: 100%; height: 100%; padding: 8px; box-sizing: border-box; }
+        .rb-exit {
+            position: absolute;
+            bottom: -10px; left: 50%;
+            transform: translateX(-50%);
+            background: #FFD600; color: #1F2D6E;
+            font-weight: 900; font-size: 14px;
+            padding: 2px 8px;
+            border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            min-width: 2.4rem; text-align: center;
+        }
+        .nav-card-text { flex: 1; min-width: 0; }
+        .nav-step {
+            font-size: 22px; font-weight: 800; line-height: 1.15;
+            margin-bottom: 6px;
+            letter-spacing: -0.01em;
+        }
+        @media (min-width: 768px) { .nav-step { font-size: 26px; } }
+        .nav-meta {
+            display: flex; flex-wrap: wrap; align-items: center;
+            gap: 8px; font-size: 14px; line-height: 1.3;
+            color: rgba(255,255,255,0.78);
+            font-weight: 500;
+        }
+        .nav-dist-pill {
+            background: rgba(51,204,255,0.18);
+            color: #BAEBFF;
+            font-weight: 800; font-size: 12px; letter-spacing: 0.02em;
+            padding: 3px 10px; border-radius: 999px;
+            white-space: nowrap;
+            border: 1px solid rgba(51,204,255,0.25);
+        }
+        .nav-meta-sep { opacity: 0.6; }
+        .nav-street { color: white; font-weight: 600; }
+        .nav-lanes {
+            display: flex; justify-content: center; gap: 16px;
+            margin-top: 12px; padding-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.10);
+            position: relative;
+        }
+        #nav-icon svg {
+            width: 100%; height: 100%; fill: none; stroke: #ffffff;
+            stroke-width: 8; stroke-linecap: round; stroke-linejoin: round;
+            filter: drop-shadow(0 2px 3px rgba(0,0,0,0.25));
+        }
+        .lane-icon {
+            font-size: 1.5rem;
+            color: rgba(255,255,255,0.35);
+        }
+        @media (min-width: 768px) { .lane-icon { font-size: 2rem; } }
+        .lane-icon.active { color: #33CCFF; filter: drop-shadow(0 0 6px rgba(51,204,255,0.5)); }
+
+        /* "Then" pill */
+        .then-pill {
+            background: linear-gradient(135deg, #2C3573, #1A4FB0);
+            color: white;
+            border-radius: 0 0 18px 18px;
+            margin: -6px 18px 0;
+            padding: 8px 16px;
+            box-shadow: 0 6px 16px rgba(20,30,60,0.20);
+            display: flex; align-items: center; gap: 12px;
+            width: fit-content;
+            transform: translateY(-100%);
+            opacity: 0;
+            transition: all 0.4s ease;
+            z-index: 10;
+            position: relative;
+            pointer-events: auto;
+        }
+        .then-pill.visible { transform: translateY(0); opacity: 1; }
+        .then-label { font-weight: 800; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.75; }
+        .then-text { font-weight: 600; font-size: 13px; }
+
+        /* ---------- Floating action buttons ---------- */
+        .fab {
+            width: 52px; height: 52px;
+            background: white; color: var(--text);
+            border: 0; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: var(--shadow-md);
+            font-size: 22px;
+            cursor: pointer;
+            transition: transform 0.15s, color 0.15s, background 0.15s;
+        }
+        .fab:hover { color: var(--primary); }
+        .fab:active { transform: scale(0.94); }
+        .mode-active { background: #E8F0FE !important; color: #1967d2 !important; }
+        @media (min-width: 768px) { .fab { width: 56px; height: 56px; font-size: 24px; } }
+
+        /* ---------- Trip preview card ---------- */
+        .trip-card-base {
+            background: white;
+            border-radius: 28px 28px 0 0;
+            box-shadow: 0 -10px 30px rgba(20,30,60,0.18);
+        }
+        @media (min-width: 768px) {
+            .trip-card-base {
+                border-radius: var(--radius-card);
+                box-shadow: var(--shadow-lg);
+            }
+        }
+        .trip-handle {
+            width: 44px; height: 5px; background: #e2e6ec;
+            border-radius: 999px; margin: 10px auto 4px;
+        }
+        .trip-body { padding: 14px 18px 18px; }
+        @media (min-width: 768px) { .trip-body { padding: 18px 20px 20px; } }
+        .trip-head {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 14px;
+        }
+        .trip-eta-time {
+            font-size: 30px; font-weight: 800; color: var(--success-deep);
+            letter-spacing: -0.025em;
+        }
+        @media (min-width: 768px) { .trip-eta-time { font-size: 34px; } }
+        .trip-dist {
+            color: var(--text-muted); font-weight: 500; font-size: 14px;
+            margin-left: 8px;
+        }
+        .trip-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: #DCFCE7; color: #166534;
+            padding: 6px 12px; border-radius: 999px;
+            font-size: 11px; font-weight: 800; text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .trip-badge-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 0 3px rgba(16,185,129,0.18);
+        }
+        .trip-dest {
+            display: flex; align-items: center; gap: 12px;
+            margin-bottom: 18px;
+            background: #F4F6FA;
+            border-radius: 16px;
+            padding: 12px 14px;
+        }
+        .trip-dest-icon {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: white;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--danger);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.10);
+            flex-shrink: 0; font-size: 20px;
+        }
+        .trip-dest-text { min-width: 0; }
+        .trip-dest-name {
+            font-weight: 700; color: var(--text); font-size: 16px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .trip-dest-meta { font-size: 12px; color: var(--text-muted); }
+        .trip-actions { display: flex; gap: 10px; }
+        .btn-ghost {
+            flex: 1; padding: 14px; border-radius: 999px;
+            border: 1px solid #E2E6EC;
+            background: white; color: var(--text);
+            font-weight: 600; font-size: 15px;
+            cursor: pointer; transition: background 0.15s;
+        }
+        .btn-ghost:hover { background: #F4F6FA; }
+        .btn-go {
+            flex: 2;
+            background: linear-gradient(135deg, #1A4FB0 0%, #2563EB 50%, #33CCFF 100%);
+            color: white; font-weight: 800;
+            padding: 14px;
+            border: 0; border-radius: 999px;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            font-size: 18px; letter-spacing: 0.08em;
+            box-shadow: 0 8px 22px rgba(37,99,235,0.42);
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.15s;
+            text-transform: uppercase;
+        }
+        .btn-go:hover { box-shadow: 0 12px 28px rgba(37,99,235,0.55); }
+        .btn-go:active { transform: scale(0.98); }
+        .btn-go-arrow {
+            background: rgba(255,255,255,0.22);
+            border-radius: 50%; width: 30px; height: 30px;
+            display: flex; align-items: center; justify-content: center;
+            transform: rotate(-45deg);
+            font-size: 16px;
+        }
+
+        /* ---------- Nav footer (active navigation) ---------- */
+        .nav-footer-base {
+            background: white;
+            border-radius: 28px 28px 0 0;
+            box-shadow: 0 -10px 30px rgba(20,30,60,0.16);
+            padding: 14px 16px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        @media (min-width: 768px) {
+            .nav-footer-base {
+                border-radius: var(--radius-lg);
+                box-shadow: var(--shadow-lg);
+                padding: 18px 22px;
+                gap: 14px;
+            }
+        }
+        .nav-footer-info { flex: 1; min-width: 0; }
+        .nav-footer-time {
+            font-size: 30px; font-weight: 800;
+            color: var(--success-deep);
+            letter-spacing: -0.025em; line-height: 1;
+        }
+        @media (min-width: 768px) { .nav-footer-time { font-size: 36px; } }
+        .nav-footer-meta {
+            color: var(--text-muted); font-size: 13px; font-weight: 500;
+            margin-top: 4px;
+        }
+        @media (min-width: 768px) { .nav-footer-meta { font-size: 15px; } }
+        .meta-sep { margin: 0 6px; opacity: 0.5; }
+        .nav-footer-actions { display: flex; align-items: center; gap: 8px; }
+        .footer-pill {
+            width: 44px; height: 44px;
+            border-radius: 50%; border: 0;
+            background: #F4F6FA;
+            color: var(--text);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+        }
+        .footer-pill:hover { background: #E8ECF3; }
+        .footer-pill:active { transform: scale(0.94); }
+        .footer-pill-report { color: var(--accent); }
+        .btn-exit {
+            width: 50px; height: 50px;
+            border-radius: 50%; border: 0;
+            background: linear-gradient(135deg, var(--danger), var(--danger-deep));
+            color: white;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; cursor: pointer;
+            box-shadow: 0 6px 14px rgba(255,61,127,0.35);
+            transition: transform 0.1s, box-shadow 0.15s;
+        }
+        .btn-exit:hover { box-shadow: 0 8px 18px rgba(255,61,127,0.45); }
+        .btn-exit:active { transform: scale(0.94); }
+
+        /* Speed limit sign */
+        .speed-limit-sign {
+            width: 64px; height: 64px;
+            background: white;
+            border: 5px solid var(--danger-deep);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Roboto', sans-serif;
+            font-weight: 900;
+            font-size: 26px;
+            color: var(--text);
+            box-shadow: var(--shadow-md);
+            z-index: 3100;
+            position: absolute;
+            top: -84px; left: 16px;
+        }
+        @media (min-width: 768px) {
+            .speed-limit-sign {
+                width: 84px; height: 84px;
+                border-width: 6px; font-size: 36px;
+                top: -104px; left: 20px;
+            }
+        }
+
+        /* ---------- Settings sheet ---------- */
+        .settings-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(17, 22, 46, 0.45);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+            z-index: 9000;
+        }
+        .settings-backdrop.open { opacity: 1; pointer-events: auto; }
+        .settings-sheet {
+            position: absolute;
+            left: 50%;
+            bottom: 0;
+            width: 100%;
+            max-width: 460px;
+            transform: translate(-50%, 100%);
+            background: white;
+            border-radius: 28px 28px 0 0;
+            box-shadow: 0 -16px 40px rgba(20,30,60,0.22);
+            padding: 14px 20px 22px;
+            z-index: 9001;
+            transition: transform 0.32s cubic-bezier(0.22, 0.8, 0.36, 1);
+        }
+        .settings-sheet.open { transform: translate(-50%, 0); }
+        @media (min-width: 768px) {
+            .settings-sheet {
+                bottom: 50%; transform: translate(-50%, 50%) scale(0.96);
+                border-radius: 22px;
+                padding: 22px 24px 24px;
+                opacity: 0;
+            }
+            .settings-sheet.open { transform: translate(-50%, 50%) scale(1); opacity: 1; }
+        }
+        .settings-handle {
+            width: 44px; height: 5px; background: #e2e6ec;
+            border-radius: 999px; margin: 0 auto 12px;
+        }
+        @media (min-width: 768px) { .settings-handle { display: none; } }
+        .settings-head {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .settings-title {
+            font-size: 20px; font-weight: 800; color: var(--text);
+            letter-spacing: -0.01em;
+        }
+        .settings-close {
+            width: 36px; height: 36px; border-radius: 50%; border: 0;
+            background: #F4F6FA; color: var(--text);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; cursor: pointer;
+            transition: background 0.15s;
+        }
+        .settings-close:hover { background: #E8ECF3; }
+        .settings-section {
+            font-size: 11px; font-weight: 800; letter-spacing: 0.08em;
+            text-transform: uppercase; color: var(--text-muted);
+            margin: 14px 0 8px;
+        }
+        .voice-options { display: flex; flex-direction: column; gap: 8px; }
+        .voice-option {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: #F7F8FB;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .voice-option:hover { background: #EEF1F6; }
+        .voice-option.selected {
+            border-color: var(--primary);
+            background: #EFF4FF;
+        }
+        .voice-radio {
+            width: 20px; height: 20px; border-radius: 50%;
+            border: 2px solid #cbd5e1;
+            flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            transition: border-color 0.15s;
+        }
+        .voice-option.selected .voice-radio { border-color: var(--primary); }
+        .voice-radio::after {
+            content: ''; width: 10px; height: 10px; border-radius: 50%;
+            background: var(--primary);
+            transform: scale(0);
+            transition: transform 0.15s;
+        }
+        .voice-option.selected .voice-radio::after { transform: scale(1); }
+        .voice-meta { flex: 1; min-width: 0; }
+        .voice-label {
+            font-weight: 700; color: var(--text); font-size: 15px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .voice-name-tag {
+            font-size: 11px; font-weight: 600;
+            color: var(--text-muted);
+            background: white;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid #e2e6ec;
+            white-space: nowrap;
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .voice-sample { font-size: 12px; color: var(--text-muted); }
+        .voice-test {
+            background: white; border: 1px solid #e2e6ec;
+            border-radius: 999px;
+            padding: 6px 12px;
+            font-size: 12px; font-weight: 600; color: var(--text);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .voice-test:hover { background: #F4F6FA; }
+
+        .settings-toggle-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 14px;
+            background: #F7F8FB;
+            border-radius: 14px;
+        }
+        .toggle-label { font-weight: 600; color: var(--text); font-size: 15px; }
+        .toggle-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+        .switch {
+            width: 46px; height: 26px;
+            background: #cbd5e1; border-radius: 999px;
+            position: relative; cursor: pointer;
+            flex-shrink: 0;
+            transition: background 0.2s;
+            border: 0;
+        }
+        .switch::after {
+            content: '';
+            width: 22px; height: 22px; border-radius: 50%;
+            background: white; position: absolute;
+            top: 2px; left: 2px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+        }
+        .switch.on { background: var(--primary); }
+        .switch.on::after { transform: translateX(20px); }
+
+        /* Active state for sound pill */
+        .footer-pill.muted { color: var(--text-muted); position: relative; }
+        .footer-pill.muted::before {
+            content: ''; position: absolute;
+            left: 8px; right: 8px; top: 50%;
+            height: 2px; background: var(--danger);
+            transform: rotate(-45deg);
+            border-radius: 1px;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div id="map-wrapper">
+        <div id="map"></div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TOP SEARCH PILL (EXPLORE MODE)             -->
+    <!-- ========================================== -->
+    <div id="explore-ui" class="map-ui absolute top-0 left-0 right-0 transition-transform duration-300 pointer-events-none z-50 px-3 pt-3 md:px-5 md:pt-5">
+        <div class="w-full md:w-[420px] relative pointer-events-auto mx-auto md:mx-0">
+            <div class="search-pill" id="search-box">
+                <button class="search-action" aria-label="Settings" onclick="openSettings()">
+                    <i class="ph-bold ph-list"></i>
+                </button>
+                <input type="text" id="search-input"
+                       placeholder="Where to?"
+                       autocomplete="off" onkeypress="handleEnter(event)">
+                <button class="search-action" aria-label="Voice" onclick="document.getElementById('search-input').focus()">
+                    <i class="ph-fill ph-microphone"></i>
+                </button>
+            </div>
+            <div id="search-results" class="hidden search-results-card"></div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- NAV HEADER (next maneuver)                 -->
+    <!-- ========================================== -->
+    <div id="nav-header" class="map-ui absolute top-0 left-0 right-0 p-3 md:p-5 transform -translate-y-[150%] transition-transform duration-500 pointer-events-none z-40 md:max-w-md md:left-5 md:right-auto">
+
+        <div class="nav-card">
+            <div class="nav-card-row">
+                <div class="nav-icon-chip">
+                    <div id="nav-icon" class="nav-icon-svg-wrap"></div>
+                    <div id="roundabout-exit-label" class="rb-exit hidden"></div>
+                </div>
+                <div class="nav-card-text">
+                    <div id="nav-step" class="nav-step">Starting…</div>
+                    <div class="nav-meta">
+                        <span id="nav-dist-header" class="nav-dist-pill">0 m</span>
+                        <span class="nav-meta-sep">towards</span>
+                        <span id="nav-street-name" class="nav-street">Destination</span>
+                    </div>
+                </div>
+            </div>
+            <div id="nav-lanes" class="nav-lanes hidden"></div>
+        </div>
+
+        <div id="nav-then" class="then-pill">
+            <span class="then-label">Then</span>
+            <i id="nav-then-icon" class="ph-bold ph-arrow-right then-icon"></i>
+            <span id="nav-then-text" class="then-text">Turn right</span>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- FLOATING ACTION BUTTONS                    -->
+    <!-- ========================================== -->
+    <div id="map-controls" class="map-ui absolute bottom-32 right-3 md:right-5 flex flex-col gap-3 transition-transform duration-300 items-end z-[900]">
+        <button id="sim-btn" onclick="toggleSimulation()" class="fab" aria-label="Toggle simulation">
+            <i class="ph-fill ph-broadcast"></i>
+        </button>
+        <button onclick="handleLocate()" class="fab" aria-label="My location">
+            <i class="ph-fill ph-crosshair"></i>
+        </button>
+        <button onclick="map.setZoom(map.getZoom() + 1)" class="fab hidden md:flex" aria-label="Zoom in">
+            <i class="ph ph-plus"></i>
+        </button>
+        <button onclick="map.setZoom(map.getZoom() - 1)" class="fab hidden md:flex" aria-label="Zoom out">
+            <i class="ph ph-minus"></i>
+        </button>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TRIP PREVIEW CARD                          -->
+    <!-- ========================================== -->
+    <div id="trip-card" class="map-ui trip-card-base absolute bottom-0 left-0 right-0 transform translate-y-[110%] transition-transform duration-300 md:w-[420px] md:left-5 md:bottom-5 z-50">
+
+        <div class="trip-handle md:hidden"></div>
+
+        <div class="trip-body">
+            <div class="trip-head">
+                <div class="flex items-baseline">
+                    <span id="route-time" class="trip-eta-time">-- min</span>
+                    <span id="route-dist" class="trip-dist">(-- km)</span>
+                </div>
+                <div class="trip-badge">
+                    <span class="trip-badge-dot"></span>
+                    Fastest
+                </div>
+            </div>
+
+            <div class="trip-dest">
+                <div class="trip-dest-icon"><i class="ph-fill ph-map-pin"></i></div>
+                <div class="trip-dest-text">
+                    <div id="route-dest" class="trip-dest-name">Destination</div>
+                    <div class="trip-dest-meta">Typically light traffic</div>
+                </div>
+            </div>
+
+            <div class="trip-actions">
+                <button id="close-trip-btn" onclick="clearMapState()" class="btn-ghost">Cancel</button>
+                <button id="start-btn" onclick="startNavigation()" class="btn-go">
+                    <span class="btn-go-arrow"><i class="ph-bold ph-navigation-arrow"></i></span>
+                    <span>GO</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- NAV FOOTER (active navigation)             -->
+    <!-- ========================================== -->
+    <div id="nav-footer" class="map-ui nav-footer-base absolute bottom-0 left-0 right-0 transform translate-y-[150%] transition-transform duration-300 z-[2000] md:max-w-md md:left-5 md:bottom-5 md:right-auto">
+
+        <div id="speed-limit" class="speed-limit-sign hidden">
+            <span id="speed-val">50</span>
+        </div>
+
+        <div class="nav-footer-info">
+            <div id="nav-footer-time" class="nav-footer-time">0 min</div>
+            <div class="nav-footer-meta">
+                <span id="nav-footer-dist">0 km</span>
+                <span class="meta-sep">·</span>
+                <span id="nav-footer-eta">12:00</span>
+            </div>
+        </div>
+
+        <div class="nav-footer-actions">
+            <button id="nav-mute-btn" class="footer-pill" onclick="toggleMute()" aria-label="Sound">
+                <i class="ph-fill ph-speaker-high"></i>
+            </button>
+            <button class="footer-pill footer-pill-report" onclick="showToast('Report submitted')" aria-label="Report">
+                <i class="ph-fill ph-warning-octagon"></i>
+            </button>
+            <button onclick="stopNavigation()" class="btn-exit" aria-label="End navigation">
+                <i class="ph-bold ph-x"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Settings sheet -->
+    <div id="settings-backdrop" class="settings-backdrop" onclick="closeSettings()"></div>
+    <div id="settings-sheet" class="settings-sheet" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <div class="settings-handle"></div>
+        <div class="settings-head">
+            <div id="settings-title" class="settings-title">Settings</div>
+            <button class="settings-close" onclick="closeSettings()" aria-label="Close">
+                <i class="ph-bold ph-x"></i>
+            </button>
+        </div>
+
+        <div class="settings-section">Navigation voice</div>
+        <div id="voice-options" class="voice-options"></div>
+
+        <div class="settings-section">Sound</div>
+        <div class="settings-toggle-row">
+            <div>
+                <div class="toggle-label">Voice guidance</div>
+                <div class="toggle-meta">Spoken turn-by-turn directions</div>
+            </div>
+            <button id="voice-mute-switch" class="switch on" onclick="toggleMute()" aria-label="Toggle voice"></button>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="map-ui absolute top-2/3 left-1/2 -translate-x-1/2 bg-[#11162E]/95 text-white px-6 py-3 rounded-full text-sm font-medium shadow-lg opacity-0 transition-all duration-300 pointer-events-none transform translate-y-4 backdrop-blur z-[9999]">
+        Message
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+    <script>
+        // --- Setup ---
+        const DEFAULT_COORDS = { lat: 39.4812, lng: -0.3473 };
+        const LOOKAHEAD_METERS = 20;
+        const REROUTE_THRESHOLD_METERS = 20;
+
+        const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([DEFAULT_COORDS.lat, DEFAULT_COORDS.lng], 16);
+        
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; CARTO',
+            subdomains: 'abcd',
+            maxZoom: 20
+        }).addTo(map);
+
+        // --- State ---
+        let userLocation = null, destLocation = null;
+        let routingControl = null;
+        let userMarker = null, destMarker = null;
+        let routeCoords = [], routeInstructions = [];
+        let routeDistanceIndex = [];
+        let totalRouteSeconds = 0;
+        let rawRouteData = null; 
+        let isNavigating = false;
+        let animationFrameId = null;
+        let currentVisualHeading = 0;
+        let speedLimitInterval = null; 
+        
+        // Simulation / GPS Logic
+        let isSimulationEnabled = true; // Default to Simulation
+        let gpsWatchId = null;
+        let navIndex = 0; // Current index in simulation route
+
+        // --- Icons ---
+        const createIcon = (type) => {
+            if (type === 'user') {
+                return L.divIcon({
+                    className: 'user-pulse',
+                    html: `<div style="width:20px;height:20px;background:#33CCFF;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(20,30,60,0.35);position:relative;z-index:10;"></div>`,
+                    iconSize: [20, 20], iconAnchor: [10, 10]
+                });
+            } else if (type === 'arrow') {
+                return L.divIcon({
+                    className: 'nav-arrow-icon',
+                    html: `
+                        <div class="arrow-icon-inner" style="width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 4px 8px rgba(20,30,60,0.35));">
+                            <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+                                <defs>
+                                    <linearGradient id="arrG" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stop-color="#33CCFF"/>
+                                        <stop offset="100%" stop-color="#1A4FB0"/>
+                                    </linearGradient>
+                                </defs>
+                                <circle cx="28" cy="28" r="22" fill="url(#arrG)" stroke="#fff" stroke-width="3"></circle>
+                                <path d="M28 13 L37 33 L28 28 L19 33 Z" fill="#fff"></path>
+                            </svg>
+                        </div>`,
+                    iconSize: [56, 56], iconAnchor: [28, 28]
+                });
+            } else {
+                return L.divIcon({
+                    className: 'custom-pin',
+                    html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#EA4335" class="drop-shadow-lg w-10 h-10"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"></path><circle cx="12" cy="9" r="2.5" fill="#751510"></circle></svg>`,
+                    iconSize: [40, 40], iconAnchor: [20, 40], popupAnchor: [0, -42]
+                });
+            }
+        };
+
+        map.on('click', e => { 
+            if(!isNavigating) {
+                document.getElementById('search-results').classList.add('hidden');
+                setDestination(e.latlng, "Dropped Pin"); 
+            }
+        });
+
+        function setDestination(latlng, name) {
+            destLocation = latlng;
+            if(destMarker) map.removeLayer(destMarker);
+            destMarker = L.marker(latlng, {icon: createIcon('dest')}).addTo(map);
+            const shortName = name.split(',')[0];
+            document.getElementById('route-dest').textContent = shortName;
+            document.getElementById('search-input').value = shortName;
+            if(userLocation) calculateRoute();
+            else handleLocate(true);
+        }
+
+        function handleLocate(autoRoute = false) {
+            if(isNavigating) return;
+            if(!navigator.geolocation) return useFallback(autoRoute);
+            showToast("Locating you...");
+            navigator.geolocation.getCurrentPosition(
+                pos => updateUserLoc(pos.coords.latitude, pos.coords.longitude, autoRoute),
+                () => useFallback(autoRoute), 
+                { timeout: 5000, enableHighAccuracy: true }
+            );
+        }
+
+        function useFallback(auto) { 
+            updateUserLoc(DEFAULT_COORDS.lat, DEFAULT_COORDS.lng, auto, true); 
+        }
+
+        function updateUserLoc(lat, lng, auto, fallback) {
+            userLocation = L.latLng(lat, lng);
+            if(userMarker) map.removeLayer(userMarker);
+            userMarker = L.marker(userLocation, {icon: createIcon('user')}).addTo(map);
+            if(!auto) {
+                map.setView(userLocation, 16, { animate: true });
+                if(fallback) showToast("GPS failed. Welcome to UPV!");
+            }
+            if(destLocation) calculateRoute();
+        }
+
+        function toggleSimulation() {
+            isSimulationEnabled = !isSimulationEnabled;
+            const btn = document.getElementById('sim-btn');
+            
+            if (!isSimulationEnabled) {
+                // Swithced to Real GPS
+                btn.classList.add('mode-active');
+                showToast("Real GPS Navigation Active");
+                if (isNavigating) {
+                    cancelAnimationFrame(animationFrameId); // Stop simulation loop
+                    startGPSWatch(); // Start watching position
+                }
+            } else {
+                // Switched to Simulation
+                btn.classList.remove('mode-active');
+                showToast("Simulation Mode Active");
+                if (isNavigating) {
+                    stopGPSWatch();
+                    // Need to find nearest point on route to resume simulation nicely
+                    if(userMarker) {
+                        const currentLL = userMarker.getLatLng();
+                        navIndex = findClosestRouteIndex(currentLL);
+                    }
+                    animateRoute(); // Resume/Start simulation loop
+                }
+            }
+        }
+
+        function startGPSWatch() {
+            if (!navigator.geolocation) {
+                showToast("Geolocation not supported");
+                return;
+            }
+            stopGPSWatch(); // Clear existing
+            gpsWatchId = navigator.geolocation.watchPosition(
+                handleGPSUpdate,
+                (err) => console.warn("GPS Error", err),
+                { enableHighAccuracy: true, maximumAge: 1000 }
+            );
+        }
+
+        function stopGPSWatch() {
+            if (gpsWatchId !== null) {
+                navigator.geolocation.clearWatch(gpsWatchId);
+                gpsWatchId = null;
+            }
+        }
+
+        function handleGPSUpdate(pos) {
+            if (!isNavigating || isSimulationEnabled) return;
+
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            const newPos = L.latLng(lat, lng);
+            
+            // 1. Get Snapped Point & Info
+            const snapInfo = getClosestPointOnRoute(newPos);
+            const snappedPos = snapInfo.point;
+            const distToRoute = snapInfo.dist;
+            const segIndex = snapInfo.index;
+
+            // 2. Decide: Stick or Drift
+            let displayPos;
+            
+            if (distToRoute > REROUTE_THRESHOLD_METERS) {
+                console.log("Off route detected: " + distToRoute + "m. Recalculating...");
+                showToast("Recalculating route...");
+                userLocation = newPos;
+                calculateRoute(); // Will restart nav
+                return; // Stop here until new route
+            } else {
+                // Stick mode
+                displayPos = snappedPos;
+                navIndex = segIndex; // Sync simulation state to this point
+            }
+
+            // 3. Update Marker
+            if (userMarker) {
+                userMarker.setLatLng(displayPos);
+            }
+
+            // 4. Orientation & Camera (Look ahead from SNAPPED position)
+            const lookaheadPt = getLookaheadPoint(segIndex, displayPos, LOOKAHEAD_METERS);
+            if (lookaheadPt) {
+                const bearing = getBearing(displayPos.lat, displayPos.lng, lookaheadPt.lat, lookaheadPt.lng);
+                currentVisualHeading = bearing; 
+                updateCamera(displayPos, currentVisualHeading);
+            } else {
+                updateCamera(displayPos, currentVisualHeading);
+            }
+
+            // 5. Update UI
+            updateInstructions(segIndex, displayPos);
+            updateTripDashboard(segIndex, 0);
+        }
+
+        // --- NEW Helper: Find exact closest point on the route polyline ---
+        function getClosestPointOnRoute(latlng) {
+            let minDist = Infinity;
+            let bestPoint = latlng;
+            let bestIndex = 0;
+
+            for(let i=0; i<routeCoords.length-1; i++) {
+                // Convert lat/lng to container points for 2D projection math
+                // This is robust for small distances (<1km) which is our case
+                const p = map.latLngToLayerPoint(latlng);
+                const p1 = map.latLngToLayerPoint(routeCoords[i]);
+                const p2 = map.latLngToLayerPoint(routeCoords[i+1]);
+                
+                // Leaflet util to project point onto segment
+                const closestP = L.LineUtil.closestPointOnSegment(p, p1, p2);
+                const closestLL = map.layerPointToLatLng(closestP);
+                const d = map.distance(latlng, closestLL);
+                
+                if(d < minDist) {
+                    minDist = d;
+                    bestPoint = closestLL;
+                    bestIndex = i;
+                }
+            }
+            return { point: bestPoint, dist: minDist, index: bestIndex };
+        }
+
+        function findClosestRouteIndex(latlng) {
+            let minD = Infinity;
+            let idx = 0;
+            for (let i = 0; i < routeCoords.length; i++) {
+                const d = map.distance(latlng, routeCoords[i]);
+                if (d < minD) {
+                    minD = d;
+                    idx = i;
+                }
+            }
+            return idx;
+        }
+
+        async function calculateRoute() {
+            if(!userLocation || !destLocation) return;
+            if(routingControl) map.removeControl(routingControl);
+            rawRouteData = null;
+
+            try {
+                const url = `https://router.project-osrm.org/route/v1/driving/${userLocation.lng},${userLocation.lat};${destLocation.lng},${destLocation.lat}?overview=full&steps=true&geometries=geojson&annotations=duration,distance,speed,nodes,maxspeed`;
+                const response = await fetch(url);
+                rawRouteData = await response.json();
+            } catch(e) {
+                console.error("OSM Fetch Error", e);
+            }
+            
+            routingControl = L.Routing.control({
+                waypoints: [userLocation, destLocation],
+                router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1', profile: 'driving' }),
+                lineOptions: {
+                    styles: [
+                        {color: '#0B2A66', opacity: 0.5, weight: 14, lineCap: 'round', lineJoin: 'round'},
+                        {color: '#1A4FB0', opacity: 1, weight: 11, lineCap: 'round', lineJoin: 'round'},
+                        {color: '#33CCFF', opacity: 1, weight: 6,  lineCap: 'round', lineJoin: 'round'}
+                    ],
+                    addWaypoints: false
+                },
+                createMarker: () => null,
+                addWaypoints: false, draggableWaypoints: false, 
+                // Don't auto-fit bounds if we are already navigating
+                fitSelectedRoutes: !isNavigating,
+                show: false 
+            }).on('routesfound', e => {
+                const route = e.routes[0];
+                routeCoords = route.coordinates;
+                routeInstructions = route.instructions; 
+
+                routeDistanceIndex = [0];
+                let totalDist = 0;
+                for(let i = 0; i < routeCoords.length - 1; i++) {
+                    totalDist += map.distance(routeCoords[i], routeCoords[i+1]);
+                    routeDistanceIndex.push(totalDist);
+                }
+                
+                totalRouteSeconds = route.summary.totalTime;
+                
+                // If we are already navigating (e.g. reroute), don't show preview, just keep going
+                if (isNavigating) {
+                    navIndex = 0; // Reset sim index
+                    resetSpokenState();
+                    return;
+                }
+
+                // Initial Preview Setup
+                const hours = Math.floor(totalRouteSeconds / 3600);
+                const mins = Math.round((totalRouteSeconds % 3600) / 60);
+                let timeStr = mins + " min";
+                if(hours > 0) timeStr = hours + " hr " + mins + " min";
+                
+                const km = (route.summary.totalDistance / 1000).toFixed(1);
+                
+                document.getElementById('route-time').textContent = timeStr;
+                document.getElementById('route-dist').textContent = `(${km} km)`;
+                document.getElementById('nav-footer-time').textContent = timeStr;
+                document.getElementById('nav-footer-dist').textContent = km + " km";
+                
+                const now = new Date();
+                now.setSeconds(now.getSeconds() + totalRouteSeconds);
+                document.getElementById('nav-footer-eta').textContent = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+                document.getElementById('trip-card').classList.remove('translate-y-[110%]');
+                document.getElementById('trip-card').classList.add('translate-y-0');
+                document.getElementById('map-controls').classList.add('-translate-y-[200px]');
+            }).addTo(map);
+        }
+
+        function startNavigation() {
+            if(!routeCoords.length) return;
+            // Cancel any in-flight pan/zoom animation (e.g. fitBounds from
+            // routesfound) before we re-aim the camera, otherwise the route
+            // polyline can settle at one projection while tiles settle at
+            // another, producing visible misalignment.
+            map.stop();
+            isNavigating = true;
+            navIndex = 0; // Reset sim index
+            
+            document.getElementById('explore-ui').classList.add('-translate-y-full');
+            document.getElementById('trip-card').classList.add('translate-y-[110%]');
+            document.getElementById('trip-card').classList.remove('translate-y-0');
+            
+            const controls = document.getElementById('map-controls');
+            controls.classList.remove('translate-y-[200px]');
+            controls.classList.add('-translate-y-[250px]');
+            
+            document.getElementById('nav-header').classList.remove('-translate-y-[150%]');
+            document.getElementById('nav-footer').classList.remove('translate-y-[150%]');
+            document.getElementById('map-wrapper').style.perspective = "1200px";
+            
+            if(userMarker) map.removeLayer(userMarker);
+            const startPos = routeCoords[0];
+            userMarker = L.marker(startPos, { icon: createIcon('arrow'), zIndexOffset: 1000 }).addTo(map);
+
+            const startLatLng = L.latLng(startPos.lat, startPos.lng);
+            
+            // Single synchronous setView at zoom 18 (inside updateCamera).
+            // We deliberately don't call setZoom with animate:true here —
+            // an in-flight zoom animation racing the camera transform was
+            // leaving the route polyline projected at the old zoom while
+            // the tiles re-projected at the new one.
+            updateCamera(startLatLng, 0);
+
+            fetchSpeedLimit();
+            speedLimitInterval = setInterval(fetchSpeedLimit, 2000); 
+
+            if (isSimulationEnabled) {
+                animateRoute();
+            } else {
+                startGPSWatch();
+            }
+
+            // Voice greeting AFTER nav loop is running, fully defensive —
+            // we never want a TTS hiccup to block the simulation.
+            try {
+                if (typeof resetSpokenState === 'function') resetSpokenState();
+            } catch (e) {
+                console.warn('Voice greeting failed:', e);
+            }
+        }
+
+        function updateCamera(pos, bearing) {
+            // Re-apply scale(2.0) for thicker roads
+            document.getElementById('map').style.transform = `rotateX(60deg) rotateZ(${-bearing}deg) scale(2.0)`;
+            
+            const el = userMarker ? userMarker.getElement() : null;
+            if (el) {
+                const inner = el.querySelector('.arrow-icon-inner');
+                if(inner) inner.style.transform = `rotate(${bearing}deg)`;
+            }
+            
+            // Adjust Offset: Scale 2.0 changes visual center logic
+            // To keep car at bottom ~25%, we calculate offset based on 2x scaled pixels
+            const offsetCenter = shiftLatLng(pos.lat, pos.lng, 35, bearing);
+            
+            // Force strict zoom 18
+            map.setView(offsetCenter, 18, {animate: false}); 
+        }
+
+        function shiftLatLng(lat, lng, meters, bearing) {
+            const R = 6378137;
+            const d = meters;
+            const brng = bearing * Math.PI / 180;
+            const phi1 = lat * Math.PI / 180;
+            const lam1 = lng * Math.PI / 180;
+            const phi2 = Math.asin(Math.sin(phi1) * Math.cos(d/R) + Math.cos(phi1) * Math.sin(d/R) * Math.cos(brng));
+            const lam2 = lam1 + Math.atan2(Math.sin(brng) * Math.sin(d/R) * Math.cos(phi1), Math.cos(d/R) - Math.sin(phi1) * Math.sin(phi2));
+            return L.latLng(phi2 * 180 / Math.PI, lam2 * 180 / Math.PI);
+        }
+
+        function animateRoute() {
+            let startTime = null;
+            let currentSpeed = 500; 
+            
+            const lerp = (a, b, t) => a + (b - a) * t;
+
+            function angularDiff(a, b) {
+                let d = (b - a + 540) % 360 - 180;
+                return d;
+            }
+
+            function step(timestamp) {
+                if (!isNavigating || !isSimulationEnabled) return;
+                // Re-queue *first*. A thrown exception anywhere below would
+                // otherwise leave the rAF chain dead and freeze the marker.
+                animationFrameId = requestAnimationFrame(step);
+
+                try {
+                    if (!startTime) startTime = timestamp;
+                    const progress = timestamp - startTime;
+                    const percent = Math.min(progress / currentSpeed, 1);
+
+                    if (navIndex >= routeCoords.length - 1) {
+                        cancelAnimationFrame(animationFrameId);
+                        stopNavigation();
+                        return;
+                    }
+
+                    const start = routeCoords[navIndex];
+                    const end = routeCoords[navIndex + 1];
+                    if (!start || !end) {
+                        cancelAnimationFrame(animationFrameId);
+                        stopNavigation();
+                        return;
+                    }
+
+                    const lat = lerp(start.lat, end.lat, percent);
+                    const lng = lerp(start.lng, end.lng, percent);
+                    const currPos = L.latLng(lat, lng);
+
+                    const lookaheadPt = getLookaheadPoint(navIndex, currPos, LOOKAHEAD_METERS);
+                    if (lookaheadPt) {
+                        const bearing = getBearing(currPos.lat, currPos.lng, lookaheadPt.lat, lookaheadPt.lng);
+                        if (userMarker) {
+                            userMarker.setLatLng(currPos);
+                            const diff = angularDiff(currentVisualHeading, bearing);
+                            currentVisualHeading = currentVisualHeading + diff * 0.15;
+                            try { updateCamera(currPos, currentVisualHeading); } catch (e) { console.warn('updateCamera failed:', e); }
+                        }
+                    }
+
+                    try { updateInstructions(navIndex, currPos); } catch (e) { console.warn('updateInstructions failed:', e); }
+                    try { updateTripDashboard(navIndex, percent); } catch (e) { console.warn('updateTripDashboard failed:', e); }
+
+                    if (navIndex + 3 < routeCoords.length) {
+                        const b1 = getBearing(routeCoords[navIndex].lat, routeCoords[navIndex].lng, routeCoords[navIndex + 1].lat, routeCoords[navIndex + 1].lng);
+                        const b2 = getBearing(routeCoords[navIndex + 2].lat, routeCoords[navIndex + 2].lng, routeCoords[navIndex + 3].lat, routeCoords[navIndex + 3].lng);
+                        const turnAngle = Math.abs(angularDiff(b1, b2));
+                        currentSpeed = turnAngle > 15 ? 1200 : 300;
+                    }
+
+                    if (percent >= 1) {
+                        startTime = null;
+                        navIndex++;
+                    }
+                } catch (e) {
+                    console.warn('animation step error:', e);
+                }
+            }
+            animationFrameId = requestAnimationFrame(step);
+        }
+
+        // ... [Rest of getLookaheadPoint, updateInstructions, etc.] ...
+
+        function getLookaheadPoint(currentIndex, currentPosLatLng, lookaheadMeters) {
+            let distAcc = 0;
+            let prevLatLng = currentPosLatLng;
+            for (let i = currentIndex + 1; i < routeCoords.length; i++) {
+                const pt = routeCoords[i];
+                const nextLatLng = L.latLng(pt.lat, pt.lng);
+                const d = map.distance(prevLatLng, nextLatLng);
+                if (distAcc + d >= lookaheadMeters) {
+                    const ratio = (lookaheadMeters - distAcc) / d;
+                    const lat = prevLatLng.lat + (nextLatLng.lat - prevLatLng.lat) * ratio;
+                    const lng = prevLatLng.lng + (nextLatLng.lng - prevLatLng.lng) * ratio;
+                    return L.latLng(lat, lng);
+                }
+                distAcc += d;
+                prevLatLng = nextLatLng;
+            }
+            return routeCoords.length ? L.latLng(routeCoords[routeCoords.length-1]) : null;
+        }
+
+        function updateTripDashboard(index, percent) {
+            if (routeDistanceIndex.length === 0) return;
+            const distAtIndex = routeDistanceIndex[index];
+            const distNext = routeDistanceIndex[Math.min(index + 1, routeDistanceIndex.length - 1)];
+            const currentDist = distAtIndex + (distNext - distAtIndex) * percent;
+            const totalDist = routeDistanceIndex[routeDistanceIndex.length - 1];
+            const remainingDist = Math.max(0, totalDist - currentDist);
+            const remainingSeconds = (remainingDist / totalDist) * totalRouteSeconds;
+
+            const h = Math.floor(remainingSeconds / 3600);
+            const m = Math.ceil((remainingSeconds % 3600) / 60);
+            let timeStr = m + " min";
+            if (h > 0) timeStr = h + " hr " + m + " min";
+            if (remainingSeconds < 60) timeStr = "0 min";
+
+            document.getElementById('nav-footer-time').textContent = timeStr;
+            document.getElementById('nav-footer-dist').textContent = (remainingDist / 1000).toFixed(1) + " km";
+            const etaDate = new Date();
+            etaDate.setSeconds(etaDate.getSeconds() + remainingSeconds);
+            document.getElementById('nav-footer-eta').textContent = etaDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+
+        function updateInstructions(idx, currPos) {
+            const instr = routeInstructions.find(i => i.index >= idx) || routeInstructions[routeInstructions.length - 1];
+            if(!instr) return;
+
+            let text = instr.text;
+            if(text.includes('Head')) text = "Continue";
+            text = text.replace(/traffic circle/gi, "roundabout").replace(/center/gi, "centre");
+
+            document.getElementById('nav-step').textContent = "Starting..."; 
+            
+            const stepEl = document.getElementById('nav-step');
+            const streetEl = document.getElementById('nav-street-name');
+            const distHeaderEl = document.getElementById('nav-dist-header');
+            
+            const destIndex = Math.min(instr.index, routeCoords.length - 1);
+            const d = map.distance(currPos, routeCoords[destIndex]);
+            let distText = d >= 1000 ? (d/1000).toFixed(1) + " km" : Math.round(d/10)*10 + " m";
+            distHeaderEl.textContent = distText;
+            const instrIdx = routeInstructions.indexOf(instr);
+            const rbVoiceContext = roundaboutContext(instrIdx);
+
+            // Voice announcement at progressive distance thresholds.
+            try { announceTurn(instr, d); } catch (e) { console.warn('announceTurn failed:', e); }
+
+            if(isRoundaboutInstruction(instr, text)) {
+                const exit = rbVoiceContext.exit || getRoundaboutExitFromText(text);
+                stepEl.textContent = exit ? `Take the ${getOrdinalSuffix(exit)} exit` : "Enter the roundabout";
+                streetEl.textContent = cleanStreetName(rbVoiceContext.street) || "at the roundabout";
+            } else if(text.includes(' onto ')) {
+                const parts = text.split(' onto ');
+                stepEl.textContent = parts[0];
+                streetEl.textContent = parts[1];
+            } else {
+                stepEl.textContent = text;
+                streetEl.textContent = "on route";
+            }
+
+            document.getElementById('nav-icon').innerHTML = getNavSignSvg(instr, text);
+
+            const rbLabelEl = document.getElementById('roundabout-exit-label');
+            rbLabelEl.classList.add('hidden');
+            if (rawRouteData && rawRouteData.routes[0].legs) {
+                 const leg = rawRouteData.routes[0].legs[0];
+                 const rbContext = getRoundaboutContext(leg, instrIdx, text);
+                 if (rbContext && rbContext.label) {
+                     rbLabelEl.textContent = rbContext.label;
+                     rbLabelEl.classList.remove('hidden');
+                 }
+            }
+
+            const thenPill = document.getElementById('nav-then');
+            const nextInstrIndex = routeInstructions.indexOf(instr) + 1;
+            if (nextInstrIndex < routeInstructions.length && d < 300) {
+                const nextInstr = routeInstructions[nextInstrIndex];
+                const nType = (nextInstr.type || '').toLowerCase();
+                const nMod = (nextInstr.modifier || '').toLowerCase();
+                const nText = (nextInstr.text || '').toLowerCase();
+                
+                let shortNext = "Straight";
+                let iconClass = "ph-arrow-up";
+
+                if (nType === 'arrive' || nText.includes('arrive')) { shortNext = "Arrive"; iconClass = "ph-map-pin"; }
+                else if (nType.includes('roundabout') || nText.includes('roundabout')) {
+                    const nextRb = roundaboutContext(nextInstrIndex);
+                    shortNext = nextRb.exit ? `${getOrdinalSuffix(nextRb.exit)} exit` : "Roundabout";
+                    iconClass = "ph-arrows-clockwise";
+                }
+                else if (nMod.includes('right')) { shortNext = "Turn Right"; iconClass = "ph-arrow-right"; }
+                else if (nMod.includes('left')) { shortNext = "Turn Left"; iconClass = "ph-arrow-left"; }
+                else if (nType.includes('ramp')) { shortNext = "Ramp"; iconClass = "ph-arrow-elbow-right-up"; }
+
+                document.getElementById('nav-then-text').textContent = shortNext;
+                document.getElementById('nav-then-icon').className = `ph-bold ${iconClass} text-base md:text-xl`;
+                thenPill.classList.add('visible');
+            } else {
+                thenPill.classList.remove('visible');
+            }
+
+             if(rawRouteData && rawRouteData.routes[0].legs) {
+                const leg = rawRouteData.routes[0].legs[0];
+                const rawStep = leg.steps[routeInstructions.indexOf(instr)];
+                if(d < 1000 && rawStep && rawStep.intersections && rawStep.intersections[0] && rawStep.intersections[0].lanes) {
+                    renderRealLanes(rawStep.intersections[0].lanes);
+                } else {
+                    document.getElementById('nav-lanes').classList.add('hidden');
+                }
+             }
+        }
+
+        // --- Helper: Roundabout Logic ---
+        function getOrdinalSuffix(n) {
+            n = parseInt(n, 10);
+            if (isNaN(n)) return '';
+            const s = ["th", "st", "nd", "rd"];
+            const v = n % 100;
+            const suffix = s[(v - 20) % 10] || s[v] || s[0];
+            return `${n}${suffix}`;
+        }
+
+        function renderRealLanes(osrmLanes) {
+            const container = document.getElementById('nav-lanes');
+            container.innerHTML = '';
+            container.classList.remove('hidden');
+            osrmLanes.forEach(lane => {
+                const el = document.createElement('div');
+                const isActive = lane.valid;
+                let icon = 'ph-arrow-up';
+                if(lane.indications.includes('right')) icon = 'ph-arrow-up-right';
+                if(lane.indications.includes('left')) icon = 'ph-arrow-up-left';
+                el.className = `lane-icon ${isActive ? 'active' : ''}`;
+                el.innerHTML = `<i class="ph-bold ${icon}"></i>`;
+                container.appendChild(el);
+            });
+        }
+
+        // Build a roundabout SVG that shows the entry from the bottom and
+        // an exit arrow at the angle for a given exit number. Continental-
+        // Europe convention: counter-clockwise traffic, so the 1st exit
+        // sits to the right (~3 o'clock), 2nd straight ahead (~12 o'clock),
+        // 3rd to the left (~9 o'clock), 4th near the bottom-left.
+        function signedAngularDiff(from, to) {
+            return (to - from + 540) % 360 - 180;
+        }
+
+        function roundaboutSvgAngleFromBearings(bearingBefore, bearingAfter) {
+            const before = Number(bearingBefore);
+            const after = Number(bearingAfter);
+            if (!Number.isFinite(before) || !Number.isFinite(after)) return null;
+            return 90 - signedAngularDiff(before, after);
+        }
+
+        function buildRoundaboutSvg(exit, exitAngleOverride = null) {
+            const cx = 50, cy = 52, r = 22;
+            // Each exit sits 90° counter-clockwise from the previous one
+            // starting from the right at exit 1. Angle measured CCW from
+            // the +x axis, in degrees. (90° = up.)
+            let exitAngle = Number.isFinite(exitAngleOverride) ? exitAngleOverride : null;
+            if (exitAngle == null && exit && exit > 0) {
+                exitAngle = (exit - 1) * 90;
+            }
+
+            // Entry segment: short stub at the bottom into the circle.
+            const entryX1 = cx, entryY1 = 96, entryX2 = cx, entryY2 = cy + r;
+
+            // Roundabout circle.
+            const circle = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="6"/>`;
+
+            // Entry stub (subdued).
+            const entry = `<path d="M${entryX1} ${entryY1} L${entryX2} ${entryY2}" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="9" stroke-linecap="round"/>`;
+
+            if (exitAngle == null) {
+                // Generic roundabout — no specific exit known.
+                return `<svg viewBox="0 0 100 100">${circle}${entry}<path d="M${cx + r} ${cy} L96 ${cy}" fill="none" stroke="white" stroke-width="9" stroke-linecap="round"/><path d="M88 ${cy - 8} L96 ${cy} L88 ${cy + 8}" fill="none" stroke="white" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+            }
+
+            // Exit ray endpoint (from circle edge outward to viewBox edge).
+            const rad = exitAngle * Math.PI / 180;
+            const ux = Math.cos(rad), uy = -Math.sin(rad); // SVG y is inverted
+            const startX = cx + ux * r;
+            const startY = cy + uy * r;
+            const endX = cx + ux * 46;
+            const endY = cy + uy * 46;
+
+            // Arrowhead at the end, perpendicular to direction.
+            const headLen = 9;
+            const px = -uy, py = ux; // perpendicular unit vector
+            const aTipX = endX, aTipY = endY;
+            const aBackX = endX - ux * headLen;
+            const aBackY = endY - uy * headLen;
+            const aLeftX = aBackX + px * headLen, aLeftY = aBackY + py * headLen;
+            const aRightX = aBackX - px * headLen, aRightY = aBackY - py * headLen;
+
+            const exitRay = `<path d="M${startX.toFixed(1)} ${startY.toFixed(1)} L${endX.toFixed(1)} ${endY.toFixed(1)}" fill="none" stroke="white" stroke-width="9" stroke-linecap="round"/>`;
+            const arrowHead = `<path d="M${aLeftX.toFixed(1)} ${aLeftY.toFixed(1)} L${aTipX.toFixed(1)} ${aTipY.toFixed(1)} L${aRightX.toFixed(1)} ${aRightY.toFixed(1)}" fill="none" stroke="white" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>`;
+
+            return `<svg viewBox="0 0 100 100">${circle}${entry}${exitRay}${arrowHead}</svg>`;
+        }
+
+        function getNavSignSvg(instr, text) {
+             // Robust SVG logic
+             const type = (instr.type || '').toLowerCase();
+             const modifier = (instr.modifier || '').toLowerCase();
+             const lowerText = text.toLowerCase();
+             let key = 'straight';
+             if (type === 'arrive' || lowerText.includes('arrive')) key = 'arrive';
+             else if (type.includes('roundabout') || type.includes('rotary')) key = 'roundabout';
+             else if (type === 'fork') key = modifier.includes('left') ? 'fork-left' : 'fork-right';
+             else if (type === 'merge') key = modifier.includes('left') ? 'merge-left' : 'merge-right';
+             else if (type.includes('ramp')) key = modifier.includes('left') ? 'ramp-left' : 'ramp-right';
+             else if (modifier.includes('sharp right')) key = 'sharp-right';
+             else if (modifier.includes('sharp left')) key = 'sharp-left';
+             else if (modifier.includes('right')) key = 'right';
+             else if (modifier.includes('left')) key = 'left';
+
+             // Roundabout: parametric SVG showing the actual exit angle.
+             if (key === 'roundabout') {
+                 const idx = routeInstructions.indexOf(instr);
+                 const ctx = idx >= 0 ? roundaboutContext(idx) : {};
+                 const exit = instr.exit || (instr.maneuver && instr.maneuver.exit) || ctx.exit || null;
+                 return buildRoundaboutSvg(exit, ctx.exitAngle);
+             }
+
+             const svgMap = {
+                'right': `<svg viewBox="0 0 100 100"><path d="M30 80 V50 A20 20 0 0 1 50 30 H80" fill="none" stroke="white" stroke-width="12" stroke-linecap="round"/><path d="M65 15 L80 30 L65 45" fill="none" stroke="white" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+                'left': `<svg viewBox="0 0 100 100"><path d="M70 80 V50 A20 20 0 0 0 50 30 H20" fill="none" stroke="white" stroke-width="12" stroke-linecap="round"/><path d="M35 15 L20 30 L35 45" fill="none" stroke="white" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+                'sharp-right': `<svg viewBox="0 0 100 100"><path d="M25 80 V50 A20 20 0 0 1 45 30 H55 A20 20 0 0 1 75 50 V60" fill="none" stroke="white" stroke-width="12" stroke-linecap="round"/><path d="M60 45 L75 60 L90 45" fill="none" stroke="white" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+                'sharp-left': `<svg viewBox="0 0 100 100"><path d="M75 80 V50 A20 20 0 0 0 55 30 H45 A20 20 0 0 0 25 50 V60" fill="none" stroke="white" stroke-width="12" stroke-linecap="round"/><path d="M10 45 L25 60 L40 45" fill="none" stroke="white" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+                'straight': `<svg viewBox="0 0 100 100"><path d="M50 85 L50 15" fill="none" stroke="white" stroke-width="12" stroke-linecap="round"/><path d="M35 30 L50 15 L65 30" fill="none" stroke="white" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+                'roundabout': `<svg viewBox="0 0 100 100"><path d="M50 70 A 25 25 0 1 0 25 45 L 25 55" fill="none" stroke="white" stroke-width="12" stroke-linecap="round"/><path d="M15 45 L 25 55 L 35 45" fill="none" stroke="white" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+                'arrive': `<svg viewBox="0 0 100 100"><path d="M50 85 C 50 85 25 55 25 35 A 25 25 0 1 1 75 35 C 75 55 50 85 50 85" fill="#EF4444" stroke="white" stroke-width="4"/><circle cx="50" cy="35" r="10" fill="white"/></svg>`,
+                // Default fallbacks for complex ones (visuals)
+                'merge-left': `<svg viewBox="0 0 100 100"><path d="M35 35 L50 20 L65 35" fill="none" stroke="white" stroke-width="12" stroke-linecap="round"/><path d="M50 20 L50 85" fill="none" stroke="white" stroke-width="12" stroke-linecap="round"/><path d="M50 55 L25 85" fill="none" stroke="white" stroke-width="12" stroke-linecap="round"/></svg>`,
+                'merge-right': `<svg viewBox="0 0 100 100"><path d="M35 35 L50 20 L65 35" fill="none" stroke="white" stroke-width="12" stroke-linecap="round"/><path d="M50 20 L50 85" fill="none" stroke="white" stroke-width="12" stroke-linecap="round"/><path d="M50 55 L75 85" fill="none" stroke="white" stroke-width="12" stroke-linecap="round"/></svg>`,
+                'ramp-right': `<svg viewBox="0 0 100 100"><path d="M35 85 L35 15" fill="none" stroke="white" stroke-width="12" stroke-linecap="round" stroke-opacity="0.4"/><path d="M35 60 Q35 40 60 30 L75 25" fill="none" stroke="white" stroke-width="12" stroke-linecap="round"/><path d="M60 15 L75 25 L65 40" fill="none" stroke="white" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+                'ramp-left': `<svg viewBox="0 0 100 100"><path d="M65 85 L65 15" fill="none" stroke="white" stroke-width="12" stroke-linecap="round" stroke-opacity="0.4"/><path d="M65 60 Q65 40 40 30 L25 25" fill="none" stroke="white" stroke-width="12" stroke-linecap="round"/><path d="M35 40 L25 25 L40 15" fill="none" stroke="white" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+             };
+             return svgMap[key] || svgMap['straight'];
+        }
+
+        // (Roundabout context and others same as before)
+        function getRoundaboutContext(leg, currentIndex, text) {
+            if (!leg || !leg.steps || currentIndex < 0) return null;
+            const getExit = (step) => {
+                if(!step || !step.maneuver) return null;
+                const t = (step.maneuver.type || '').toLowerCase();
+                if (t.includes('roundabout') || t.includes('rotary')) return step.maneuver.exit || step.exit || (step.exits ? parseInt(step.exits, 10) : null);
+                return null;
+            };
+            let exit = getExit(leg.steps[currentIndex]);
+            if (!exit) exit = getRoundaboutExitFromText(text);
+            if (exit) return { label: getOrdinalSuffix(exit) };
+            if (text.toLowerCase().includes('exit') && (text.toLowerCase().includes('roundabout'))) {
+                for (let i = 1; i <= 3; i++) {
+                    const prevIndex = currentIndex - i;
+                    if (prevIndex >= 0) {
+                        exit = getExit(leg.steps[prevIndex]);
+                        if (exit) return { label: getOrdinalSuffix(exit) };
+                    }
+                }
+            }
+            return null;
+        }
+
+        function getBearing(lat1, lng1, lat2, lng2) {
+            const y = Math.sin((lng2-lng1) * Math.PI/180) * Math.cos(lat2 * Math.PI/180);
+            const x = Math.cos(lat1 * Math.PI/180) * Math.sin(lat2 * Math.PI/180) - Math.sin(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.cos((lng2-lng1) * Math.PI/180);
+            return ((Math.atan2(y, x) * 180/Math.PI) + 360) % 360;
+        }
+
+        function stopNavigation() {
+            isNavigating = false;
+            cancelAnimationFrame(animationFrameId);
+            stopGPSWatch();
+            if(speedLimitInterval) clearInterval(speedLimitInterval);
+            resetSpokenState();
+            
+            document.getElementById('map').style.transform = '';
+            document.getElementById('explore-ui').classList.remove('-translate-y-full');
+            document.getElementById('nav-header').classList.add('-translate-y-[150%]');
+            document.getElementById('nav-footer').classList.add('translate-y-[150%]');
+            
+            const controls = document.getElementById('map-controls');
+            controls.classList.remove('-translate-y-[250px]');
+            controls.classList.remove('translate-y-[200px]');
+
+            document.getElementById('trip-card').classList.remove('translate-y-[110%]');
+            document.getElementById('trip-card').classList.add('translate-y-0');
+            
+            controls.classList.add('-translate-y-[200px]');
+            document.getElementById('speed-limit').classList.add('hidden');
+            document.getElementById('roundabout-exit-label').classList.add('hidden');
+
+            if(userMarker) {
+                const ll = userMarker.getLatLng();
+                map.removeLayer(userMarker);
+                userMarker = L.marker(ll, {icon: createIcon('user')}).addTo(map);
+                map.setZoom(16);
+            }
+        }
+
+        function clearMapState() {
+            if(isNavigating) stopNavigation();
+            
+            document.getElementById('nav-header').classList.add('-translate-y-[150%]');
+            document.getElementById('nav-footer').classList.add('translate-y-[150%]');
+            document.getElementById('explore-ui').classList.remove('-translate-y-full');
+            
+            const controls = document.getElementById('map-controls');
+            controls.classList.remove('-translate-y-[250px]');
+            controls.classList.remove('translate-y-[200px]');
+
+            if(routingControl) { map.removeControl(routingControl); routingControl = null; }
+            if(destMarker) { map.removeLayer(destMarker); destMarker = null; destLocation = null; }
+            document.getElementById('trip-card').classList.add('translate-y-[110%]');
+            document.getElementById('trip-card').classList.remove('translate-y-0');
+            document.getElementById('search-input').value = '';
+            map.setZoom(16);
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.remove('opacity-0', 'translate-y-4');
+            setTimeout(() => t.classList.add('opacity-0', 'translate-y-4'), 3000);
+        }
+
+        async function searchLocation() {
+            const q = document.getElementById('search-input').value;
+            if(!q) return;
+            const res = document.getElementById('search-results');
+            res.innerHTML = '<div class="p-4 text-center text-gray-500 text-sm">Searching...</div>';
+            res.classList.remove('hidden');
+            try {
+                const data = await (await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`)).json();
+                res.innerHTML = '';
+                if(!data.length) return res.innerHTML = '<div class="p-4 text-center text-gray-500 text-sm">No results found</div>';
+                data.slice(0, 5).forEach(p => {
+                    const d = document.createElement('div');
+                    d.className = 'p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-100 flex items-center gap-3 transition';
+                    d.innerHTML = `
+                        <div class="bg-gray-100 p-2 rounded-full text-gray-500"><i class="ph-fill ph-map-pin"></i></div>
+                        <div class="min-w-0">
+                            <span class="font-medium text-gray-800 text-sm block truncate">${p.display_name.split(',')[0]}</span>
+                            <span class="text-xs text-gray-500 block truncate">${p.display_name}</span>
+                        </div>`;
+                    d.onclick = () => { 
+                        res.classList.add('hidden'); 
+                        setDestination(L.latLng(p.lat, p.lon), p.display_name); 
+                    };
+                    res.appendChild(d);
+                });
+            } catch(e) { console.error(e); res.classList.add('hidden'); }
+        }
+
+        function handleEnter(e) { if(e.key === 'Enter') searchLocation(); }
+
+        handleLocate(true);
+
+        // =====================================================
+        // Voice guidance — speech synthesis + settings sheet
+        // =====================================================
+
+        // Three voice presets. The Web Speech API doesn't expose gender,
+        // and many Android WebViews ship with only one system voice — so
+        // each preset also has its own rate/pitch profile, which makes the
+        // three presets sound clearly distinct even when the underlying
+        // SpeechSynthesisVoice is the same.
+        const VOICE_PRESETS = [
+            {
+                id: 'aria',
+                label: 'Aria',
+                blurb: 'Warm, natural · slightly higher pitch',
+                rate: 1.35,
+                pitch: 1.25,
+                nameRe: /\b(aria|samantha|jenny|emma|sonia|libby|natasha|joanna|victoria|allison|karen|moira|tessa|fiona|female)\b/i,
+            },
+            {
+                id: 'liam',
+                label: 'Liam',
+                blurb: 'Calm, confident · deeper pitch',
+                rate: 1.3,
+                pitch: 0.7,
+                nameRe: /\b(liam|guy|matthew|brian|daniel|david|alex|ryan|mark|fred|tom|george|james|oliver|male)\b/i,
+            },
+            {
+                id: 'echo',
+                label: 'Echo',
+                blurb: 'Crisp, neutral · brisk cadence',
+                rate: 1.5,
+                pitch: 1.0,
+                nameRe: null, // uses the system default voice
+            },
+        ];
+
+        let _voicesCache = [];
+        let _voiceMap = {};   // preset id -> SpeechSynthesisVoice (or null)
+        let _selectedVoiceId = safeLoad('inhouse:voice', 'aria');
+        let _muted = safeLoad('inhouse:muted', '0') === '1';
+        const _spokenForInstr = new Map(); // instr index -> spoken cue labels
+
+        function safeLoad(key, fallback) {
+            try { return localStorage.getItem(key) || fallback; } catch (e) { return fallback; }
+        }
+        function safeSave(key, value) {
+            try { localStorage.setItem(key, value); } catch (e) { /* webview may block storage */ }
+        }
+
+        function loadVoices() {
+            const all = (window.speechSynthesis ? speechSynthesis.getVoices() : []) || [];
+            _voicesCache = all;
+            _voiceMap = pickDistinctVoices(all);
+            renderVoiceOptions();
+        }
+
+        // Pick a distinct voice per preset when at least 3 are available.
+        // Prefers English voices and "premium/natural" names. Falls back to
+        // duplicates when fewer than 3 voices exist on the device — the
+        // pitch/rate profile still differentiates them at speak time.
+        function pickDistinctVoices(all) {
+            if (!all.length) return {};
+            const en = all.filter(v => /^en/i.test(v.lang));
+            const pool = en.length ? en : all;
+            const isPremium = v => /(natural|neural|premium|enhanced|google|microsoft|wavenet)/i.test(v.name);
+            const sortedPool = [...pool].sort((a, b) => Number(isPremium(b)) - Number(isPremium(a)));
+
+            const result = {};
+            const used = new Set();
+            for (const preset of VOICE_PRESETS) {
+                let pick = null;
+                if (preset.nameRe) {
+                    pick = sortedPool.find(v => preset.nameRe.test(v.name) && !used.has(v.name));
+                }
+                if (!pick) {
+                    pick = sortedPool.find(v => !used.has(v.name));
+                }
+                if (!pick) {
+                    // ran out of distinct voices — re-use any (prosody differentiates)
+                    pick = sortedPool[0] || all[0] || null;
+                }
+                if (pick) used.add(pick.name);
+                result[preset.id] = pick;
+            }
+            return result;
+        }
+
+        if ('speechSynthesis' in window) {
+            // Voices load asynchronously on most browsers.
+            speechSynthesis.onvoiceschanged = loadVoices;
+            loadVoices();
+        }
+
+        function speak(text, opts = {}) {
+            if (_muted || !text || !('speechSynthesis' in window)) return;
+            try {
+                const presetId = opts.presetId || _selectedVoiceId;
+                const preset = VOICE_PRESETS.find(p => p.id === presetId) || VOICE_PRESETS[0];
+                speechSynthesis.cancel(); // never queue announcements
+                const u = new SpeechSynthesisUtterance(text);
+                const v = _voiceMap[presetId];
+                if (v) {
+                    u.voice = v;
+                    u.lang = v.lang || 'en-US';
+                }
+                // Per-preset prosody — this is what makes the three voices
+                // sound clearly different even on a single-voice device.
+                u.rate = opts.rate != null ? opts.rate : preset.rate;
+                u.pitch = opts.pitch != null ? opts.pitch : preset.pitch;
+                u.volume = 1.0;
+                speechSynthesis.speak(u);
+            } catch (e) {
+                console.warn('TTS failed:', e);
+            }
+        }
+
+        function fmtDistanceForSpeech(meters) {
+            if (meters >= 1000) {
+                const km = meters / 1000;
+                return km >= 10 ? `${Math.round(km)} kilometers` : `${km.toFixed(1)} kilometers`;
+            }
+            const rounded = Math.round(meters / 50) * 50;
+            return `${Math.max(50, rounded)} meters`;
+        }
+
+        const ORDINAL_WORDS = ['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth'];
+        function ordinalWord(n) {
+            n = parseInt(n, 10);
+            if (isNaN(n) || n < 1) return '';
+            return ORDINAL_WORDS[n] || `${n}th`;
+        }
+        function ordinal(n) {
+            n = parseInt(n, 10);
+            if (isNaN(n)) return '';
+            const s = ['th', 'st', 'nd', 'rd'];
+            const v = n % 100;
+            return n + (s[(v - 20) % 10] || s[v] || s[0]);
+        }
+
+        function cleanStreetName(name) {
+            if (!name) return '';
+            const s = String(name).trim();
+            if (!s || /^unnamed/i.test(s) || s === '-') return '';
+            return s;
+        }
+
+        function isRoundaboutInstruction(instr, text = '') {
+            const type = (instr && instr.type || '').toLowerCase();
+            const lower = String(text || instr && instr.text || '').toLowerCase();
+            return type.includes('roundabout') || type.includes('rotary') || lower.includes('roundabout') || lower.includes('traffic circle');
+        }
+
+        function getRoundaboutExitFromText(text) {
+            const lower = String(text || '').toLowerCase();
+            const wordMap = {
+                first: 1, second: 2, third: 3, fourth: 4, fifth: 5,
+                sixth: 6, seventh: 7, eighth: 8, ninth: 9
+            };
+            for (const [word, value] of Object.entries(wordMap)) {
+                if (lower.includes(`${word} exit`)) return value;
+            }
+            const match = lower.match(/(\d+)(?:st|nd|rd|th)?\s+exit/);
+            return match ? parseInt(match[1], 10) : null;
+        }
+
+        function shortInstructionPhrase(instr, text, ctx = {}) {
+            const type = (instr.type || '').toLowerCase();
+            const mod = (instr.modifier || '').toLowerCase();
+            const streetName = cleanStreetName(ctx && ctx.street);
+            const street = streetName ? ` onto ${streetName}` : '';
+
+            if (type === 'arrive' || /arrive/i.test(text)) return 'you have arrived at your destination';
+            if (isRoundaboutInstruction(instr, text)) {
+                const exit = ctx.exit || instr.exit || (instr.maneuver && instr.maneuver.exit);
+                if (exit) {
+                    return `take the ${ordinalWord(exit)} exit${street}`;
+                }
+                return `enter the roundabout${street}`;
+            }
+            if (mod.includes('sharp right')) return `make a sharp right${street}`;
+            if (mod.includes('sharp left')) return `make a sharp left${street}`;
+            if (mod.includes('slight right')) return `keep right${street}`;
+            if (mod.includes('slight left')) return `keep left${street}`;
+            if (mod.includes('right')) return `turn right${street}`;
+            if (mod.includes('left')) return `turn left${street}`;
+            if (type === 'merge') return mod.includes('left') ? `merge left${street}` : `merge right${street}`;
+            if (type.includes('ramp')) return mod.includes('left') ? `take the left ramp${street}` : `take the right ramp${street}`;
+            if (type === 'fork') return mod.includes('left') ? `keep left at the fork${street}` : `keep right at the fork${street}`;
+            return 'continue straight';
+        }
+
+        // Speak announcements at progressive thresholds. We deliberately
+        // keep this lean — two thresholds per maneuver (~300 m heads-up,
+        // ~80 m commit) — and skip "continue straight" entirely because
+        // every multi-segment leg fires it and it carries no information.
+        function announceTurn(instr, distanceMeters) {
+            if (_muted || !instr) return;
+            const instrIdx = routeInstructions.indexOf(instr);
+            if (instrIdx < 0) return;
+
+            const ctx = roundaboutContext(instrIdx);
+            const action = shortInstructionPhrase(instr, instr.text || '', ctx);
+            const isRoundabout = isRoundaboutInstruction(instr, instr.text || '');
+            const isArrival = (instr.type || '').toLowerCase() === 'arrive' || /arrive/i.test(instr.text || '');
+
+            // Skip pure "continue straight" announcements — they're spammy
+            // and carry no info. Always announce arrivals, turns, ramps,
+            // merges, forks and roundabouts.
+            if (action === 'continue straight' && !ctx.streetChanged) return;
+
+            const spoken = _spokenForInstr.get(instrIdx) || new Set();
+            let cue = null;
+            if ((isRoundabout || isArrival) && distanceMeters <= 55 && !spoken.has('now')) {
+                cue = 'now';
+            } else if (distanceMeters <= 180 && !spoken.has('approach')) {
+                cue = 'approach';
+            }
+            if (!cue) return;
+            spoken.add(cue);
+            _spokenForInstr.set(instrIdx, spoken);
+
+            const phrase = cue === 'now'
+                ? action.charAt(0).toUpperCase() + action.slice(1)
+                : `In ${fmtDistanceForSpeech(distanceMeters)}, ${action}`;
+            speak(phrase);
+        }
+
+        function roundaboutContext(instrIdx) {
+            const ctx = { exit: null, exitAngle: null, street: null, streetChanged: false };
+            if (!rawRouteData || !rawRouteData.routes || !rawRouteData.routes[0]) return ctx;
+            const leg = rawRouteData.routes[0].legs && rawRouteData.routes[0].legs[0];
+            if (!leg || !leg.steps) return ctx;
+            const step = leg.steps[instrIdx];
+            const instr = routeInstructions[instrIdx];
+            const nearbySteps = [];
+            for (let i = Math.max(0, instrIdx - 2); i <= Math.min(leg.steps.length - 1, instrIdx + 3); i++) {
+                nearbySteps.push(leg.steps[i]);
+            }
+
+            if (step && step.maneuver && step.maneuver.exit) ctx.exit = step.maneuver.exit;
+            if (step && step.maneuver) {
+                ctx.exitAngle = roundaboutSvgAngleFromBearings(step.maneuver.bearing_before, step.maneuver.bearing_after);
+            }
+            if (!ctx.exit && instr) ctx.exit = instr.exit || (instr.maneuver && instr.maneuver.exit) || getRoundaboutExitFromText(instr.text);
+            if (!ctx.exit) {
+                const rbStep = nearbySteps.find(s => s && s.maneuver && s.maneuver.exit && isRoundaboutInstruction({ type: s.maneuver.type }, ''));
+                if (rbStep) {
+                    ctx.exit = rbStep.maneuver.exit;
+                    if (ctx.exitAngle == null) {
+                        ctx.exitAngle = roundaboutSvgAngleFromBearings(rbStep.maneuver.bearing_before, rbStep.maneuver.bearing_after);
+                    }
+                }
+            } else if (ctx.exitAngle == null) {
+                const rbStep = nearbySteps.find(s => s && s.maneuver && isRoundaboutInstruction({ type: s.maneuver.type }, ''));
+                if (rbStep) {
+                    ctx.exitAngle = roundaboutSvgAngleFromBearings(rbStep.maneuver.bearing_before, rbStep.maneuver.bearing_after);
+                }
+            }
+
+            if (isRoundaboutInstruction(instr || {}, instr && instr.text)) {
+                const nextSteps = leg.steps.slice(instrIdx + 1, instrIdx + 5);
+                const after = nextSteps.find(s => cleanStreetName(s && s.name) && !(s.maneuver && isRoundaboutInstruction({ type: s.maneuver.type }, '')));
+                if (after) ctx.street = cleanStreetName(after.name);
+            } else if (step) {
+                ctx.street = cleanStreetName(step.name);
+            }
+
+            if (step) {
+                const prev = leg.steps[instrIdx - 1];
+                const currentName = cleanStreetName(step.name);
+                const previousName = cleanStreetName(prev && prev.name);
+                if (previousName && currentName && previousName !== currentName) ctx.streetChanged = true;
+            }
+            return ctx;
+        }
+
+        function resetSpokenState() {
+            try { _spokenForInstr.clear(); } catch (e) {}
+            try {
+                if ('speechSynthesis' in window) speechSynthesis.cancel();
+            } catch (e) { /* some Android WebViews throw before TTS init */ }
+        }
+
+        // Open / close settings sheet
+        function openSettings() {
+            renderVoiceOptions();
+            renderMuteSwitch();
+            document.getElementById('settings-backdrop').classList.add('open');
+            document.getElementById('settings-sheet').classList.add('open');
+        }
+        function closeSettings() {
+            document.getElementById('settings-backdrop').classList.remove('open');
+            document.getElementById('settings-sheet').classList.remove('open');
+        }
+
+        function renderVoiceOptions() {
+            const wrap = document.getElementById('voice-options');
+            if (!wrap) return;
+            wrap.innerHTML = '';
+            for (const preset of VOICE_PRESETS) {
+                const voice = _voiceMap[preset.id];
+                const row = document.createElement('div');
+                row.className = 'voice-option' + (preset.id === _selectedVoiceId ? ' selected' : '');
+                row.innerHTML = `
+                    <div class="voice-radio"></div>
+                    <div class="voice-meta">
+                        <div class="voice-label">
+                            <span>${preset.label}</span>
+                            <span class="voice-name-tag" title="${voice ? voice.name : 'no voice'}">${voice ? voice.name : 'unavailable'}</span>
+                        </div>
+                        <div class="voice-sample">${preset.blurb}</div>
+                    </div>
+                    <button class="voice-test" data-preset="${preset.id}">Test</button>
+                `;
+                row.addEventListener('click', (e) => {
+                    if (e.target.closest('.voice-test')) return;
+                    selectVoice(preset.id);
+                });
+                row.querySelector('.voice-test').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    // Force the test to use this preset's voice + prosody,
+                    // regardless of what's currently selected. Temporarily
+                    // un-mute too so previewing always works.
+                    const wasMuted = _muted;
+                    _muted = false;
+                    speak('In 200 meters, turn right onto Main Street.', { presetId: preset.id });
+                    _muted = wasMuted;
+                });
+                wrap.appendChild(row);
+            }
+        }
+
+        function selectVoice(id) {
+            _selectedVoiceId = id;
+            // Re-render BEFORE persisting so a localStorage failure can never
+            // skip the visual update.
+            renderVoiceOptions();
+            safeSave('inhouse:voice', id);
+        }
+
+        function renderMuteSwitch() {
+            const sw = document.getElementById('voice-mute-switch');
+            if (sw) sw.classList.toggle('on', !_muted);
+            const navBtn = document.getElementById('nav-mute-btn');
+            if (navBtn) {
+                navBtn.classList.toggle('muted', _muted);
+                navBtn.querySelector('i').className = _muted
+                    ? 'ph-fill ph-speaker-slash'
+                    : 'ph-fill ph-speaker-high';
+            }
+        }
+
+        function toggleMute() {
+            _muted = !_muted;
+            renderMuteSwitch();
+            safeSave('inhouse:muted', _muted ? '1' : '0');
+            if (_muted && 'speechSynthesis' in window) {
+                try { speechSynthesis.cancel(); } catch (e) {}
+            }
+            showToast(_muted ? 'Voice muted' : 'Voice on');
+        }
+
+        renderMuteSwitch();
+        
+        // ---- Speed limit ----
+        // Primary source: OSRM route annotation (per-segment maxspeed/speed),
+        // which is already in `rawRouteData` and works offline-of-Overpass.
+        // Optional enhancement: Overpass query for the current position when
+        // the route annotation doesn't have a value for this segment.
+
+        const SPEED_BANDS = [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130];
+        const _speedCache = new Map();      // overpass cache, "lat,lng" -> {limit, ts}
+        const _SPEED_CACHE_TTL_MS = 60_000;
+        let _lastOverpassAt = 0;
+
+        function snapBand(kmh) {
+            if (!kmh || kmh <= 0) return null;
+            // Pick the closest standard speed band — OSRM "speed" can be a
+            // routing speed (slightly under the posted limit), so snapping
+            // gives a sane displayed number.
+            let best = SPEED_BANDS[0], bestDiff = Math.abs(kmh - best);
+            for (const b of SPEED_BANDS) {
+                const d = Math.abs(kmh - b);
+                if (d < bestDiff) { best = b; bestDiff = d; }
+            }
+            return best;
+        }
+
+        function parseMaxSpeed(value) {
+            if (value == null) return null;
+            if (typeof value === 'number') return value;
+            const s = String(value).toLowerCase().trim();
+            if (!s || s === 'none' || s === 'signals' || s === 'walk' || s === 'variable') return null;
+            const num = s.match(/(\d{1,3})\s*(mph|km\/?h|kph)?/);
+            if (!num) return null;
+            let n = parseInt(num[1], 10);
+            const unit = (num[2] || '').replace(/\s+/g, '');
+            if (unit === 'mph') n = Math.round(n * 1.60934);
+            return n;
+        }
+
+        function highwayDefaultKmh(hw) {
+            const m = {
+                motorway: 120, motorway_link: 80,
+                trunk: 100, trunk_link: 70,
+                primary: 90, primary_link: 60,
+                secondary: 70, secondary_link: 50,
+                tertiary: 60, tertiary_link: 50,
+                unclassified: 50,
+                residential: 30,
+                living_street: 20,
+                service: 20,
+            };
+            return m[hw] || null;
+        }
+
+        function speedLimitFromAnnotation(idx) {
+            const ann = rawRouteData
+                && rawRouteData.routes
+                && rawRouteData.routes[0]
+                && rawRouteData.routes[0].legs
+                && rawRouteData.routes[0].legs[0]
+                && rawRouteData.routes[0].legs[0].annotation;
+            if (!ann) return null;
+
+            const i = Math.max(0, Math.min(idx, (ann.speed && ann.speed.length || 1) - 1));
+
+            // Prefer explicit maxspeed array if OSRM populated it.
+            if (Array.isArray(ann.maxspeed) && ann.maxspeed[i]) {
+                const m = ann.maxspeed[i];
+                if (typeof m === 'object') {
+                    if (m.unknown || m.none) return null;
+                    let v = m.speed;
+                    if (m.unit === 'mph' && v) v = v * 1.60934;
+                    if (v) return snapBand(v);
+                } else {
+                    const parsed = parseMaxSpeed(m);
+                    if (parsed) return snapBand(parsed);
+                }
+            }
+            // Fall back to the routing speed (m/s). OSRM speeds are derived
+            // from OSM maxspeed, so snapping to bands recovers the posted limit.
+            if (Array.isArray(ann.speed) && ann.speed[i] != null) {
+                return snapBand(ann.speed[i] * 3.6);
+            }
+            return null;
+        }
+
+        function showSpeedLimit(value) {
+            const el = document.getElementById('speed-limit');
+            const valEl = document.getElementById('speed-val');
+            if (value) {
+                valEl.textContent = String(value);
+                el.classList.remove('hidden');
+            } else {
+                el.classList.add('hidden');
+            }
+        }
+
+        async function overpassLookup(lat, lng) {
+            // Best-effort enhancement; cached and rate-limited.
+            const now = Date.now();
+            if (now - _lastOverpassAt < 8_000) return null;
+            const key = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+            const hit = _speedCache.get(key);
+            if (hit && now - hit.ts < _SPEED_CACHE_TTL_MS) return hit.limit;
+            _lastOverpassAt = now;
+
+            const query =
+                `[out:json][timeout:6];` +
+                `way(around:30,${lat},${lng})[highway];` +
+                `out tags;`;
+            try {
+                const r = await fetch('https://overpass-api.de/api/interpreter', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'data=' + encodeURIComponent(query),
+                });
+                if (!r.ok) throw new Error('overpass http ' + r.status);
+                const data = await r.json();
+                let limit = null, fallback = null;
+                for (const e of (data.elements || [])) {
+                    const tags = e.tags || {};
+                    const explicit = parseMaxSpeed(tags['maxspeed']);
+                    if (explicit) { limit = explicit; break; }
+                    if (fallback == null) fallback = highwayDefaultKmh(tags.highway);
+                }
+                if (limit == null) limit = fallback;
+                _speedCache.set(key, { limit, ts: now });
+                return limit;
+            } catch (e) {
+                console.warn('Overpass speed lookup failed:', e);
+                return null;
+            }
+        }
+
+        async function fetchSpeedLimit() {
+            if (!isNavigating || !userMarker) return;
+
+            // 1) Annotation-based: instant, no network.
+            const fromAnn = speedLimitFromAnnotation(navIndex);
+            if (fromAnn) {
+                showSpeedLimit(fromAnn);
+                return;
+            }
+
+            // 2) Overpass enhancement when the annotation is missing.
+            const ll = userMarker.getLatLng();
+            const live = await overpassLookup(ll.lat, ll.lng);
+            if (live) showSpeedLimit(live);
+            // If both fail, leave whatever was last shown — don't blink to hidden.
+        }
+    </script>
+</body>
+</html>
